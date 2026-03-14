@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
 import { coordinatesToGeoJSON } from "@/lib/distance";
+import { sendNotification } from "@/lib/notify";
 import FoodListing from "@/models/FoodListing";
 import User from "@/models/User";
 
@@ -90,9 +91,46 @@ export async function POST(request: Request) {
     },
   });
 
+  const listingId = listing._id.toString();
+
+  // Fire-and-forget: notify nearby NGOs
+  void (async () => {
+    try {
+      const nearbyNgos = await User.aggregate<{ _id: { toString(): string }; name: string; distanceMeters: number }>([
+        {
+          $geoNear: {
+            near: { type: "Point", coordinates: [location.lng, location.lat] },
+            distanceField: "distanceMeters",
+            maxDistance: 10000,
+            spherical: true,
+            query: {
+              role: "ngo",
+              "location.coordinates": { $exists: true, $not: { $size: 0 } },
+            },
+          },
+        },
+        { $project: { _id: 1, name: 1, distanceMeters: 1 } },
+      ]);
+
+      await Promise.all(
+        nearbyNgos.map((ngo) => {
+          const distanceKm = (ngo.distanceMeters / 1000).toFixed(1);
+          return sendNotification({
+            userId: ngo._id.toString(),
+            type: "new_listing_nearby",
+            message: `New food listing available ${distanceKm} km from you!`,
+            listingId,
+          });
+        }),
+      );
+    } catch (err) {
+      console.error("[listings/POST] Failed to notify nearby NGOs:", err);
+    }
+  })();
+
   return NextResponse.json(
     {
-      id: listing._id.toString(),
+      id: listingId,
       status: listing.status,
       createdAt: listing.createdAt,
     },

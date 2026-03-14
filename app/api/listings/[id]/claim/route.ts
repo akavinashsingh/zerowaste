@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
+import { sendNotification } from "@/lib/notify";
 import FoodListing from "@/models/FoodListing";
 
 export async function POST(
@@ -37,6 +38,14 @@ export async function POST(
     .populate("claimedBy", "name phone")
     .populate("donorId", "name phone address")
     .lean();
+
+  // Notify the donor
+  void sendNotification({
+    userId: listing.donorId.toString(),
+    type: "listing_claimed",
+    message: `Your listing was claimed by ${session.user.name ?? "an NGO"}.`,
+    listingId: id,
+  });
 
   return NextResponse.json({ listing: updatedListing });
 }

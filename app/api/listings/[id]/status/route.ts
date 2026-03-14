@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
+import { sendNotification } from "@/lib/notify";
 import FoodListing from "@/models/FoodListing";
 
 const ALLOWED_TRANSITIONS: Record<string, string> = {
@@ -60,6 +61,20 @@ export async function PATCH(
     .populate("claimedBy", "name phone address location")
     .populate("assignedVolunteer", "name phone")
     .lean();
+
+  const message =
+    newStatus === "picked_up"
+      ? "Food has been picked up by the volunteer."
+      : "Food has been successfully delivered!";
+
+  const notifyParams = { type: newStatus, message, listingId: id };
+
+  void Promise.all([
+    sendNotification({ userId: listing.donorId.toString(), ...notifyParams }),
+    listing.claimedBy
+      ? sendNotification({ userId: listing.claimedBy.toString(), ...notifyParams })
+      : Promise.resolve(),
+  ]);
 
   return NextResponse.json({ listing: updated });
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
+import { sendNotification } from "@/lib/notify";
 import FoodListing from "@/models/FoodListing";
 
 export async function POST(
@@ -44,6 +45,17 @@ export async function POST(
     .populate("claimedBy", "name phone address location")
     .populate("assignedVolunteer", "name phone")
     .lean();
+
+  const notifyParams = {
+    type: "volunteer_assigned",
+    message: `A volunteer has accepted the pickup task for your listing.`,
+    listingId: id,
+  };
+
+  void Promise.all([
+    sendNotification({ userId: listing.donorId.toString(), ...notifyParams }),
+    sendNotification({ userId: listing.claimedBy!.toString(), ...notifyParams }),
+  ]);
 
   return NextResponse.json({ listing: updated });
 }

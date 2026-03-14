@@ -1,11 +1,19 @@
-"use client";
-import { signOut } from "next-auth/react";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 
-export default function DonorDashboard() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
-      <h1 className="text-3xl font-bold mb-4">Welcome, Donor</h1>
-      <button className="bg-red-500 text-white px-4 py-2 rounded" onClick={() => signOut()}>Logout</button>
-    </div>
-  );
+import DonorDashboardClient from "@/components/dashboard/DonorDashboardClient";
+import { authOptions } from "@/lib/auth";
+
+export default async function DonorDashboardPage() {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  if (session.user.role !== "donor") {
+    redirect(`/dashboard/${session.user.role}`);
+  }
+
+  return <DonorDashboardClient donorName={session.user.name ?? "Donor"} />;
 }

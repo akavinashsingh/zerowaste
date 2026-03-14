@@ -10,6 +10,13 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+type RawLocation = { coordinates?: number[]; address?: string };
+
+function normalizeLocation(raw: RawLocation | null | undefined) {
+  if (!raw?.coordinates?.length) return undefined;
+  return { lat: raw.coordinates[1] ?? 0, lng: raw.coordinates[0] ?? 0, address: raw.address ?? "" };
+}
+
 export const PATCH = adminOnly(async (request: Request, { params }: RouteContext) => {
   const { id } = await params;
   const body = (await request.json()) as { status?: string };
@@ -55,7 +62,12 @@ export const PATCH = adminOnly(async (request: Request, { params }: RouteContext
     return NextResponse.json({ error: "Listing not found." }, { status: 404 });
   }
 
-  return NextResponse.json({ listing });
+  const normalizedListing = {
+    ...listing,
+    location: normalizeLocation(listing.location as RawLocation | undefined),
+  };
+
+  return NextResponse.json({ listing: normalizedListing });
 });
 
 export const DELETE = adminOnly(async (_: Request, { params }: RouteContext) => {

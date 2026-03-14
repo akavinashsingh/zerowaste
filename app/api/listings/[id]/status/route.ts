@@ -11,6 +11,13 @@ const ALLOWED_TRANSITIONS: Record<string, string> = {
   delivered: "picked_up",
 };
 
+type RawLocation = { coordinates?: number[]; address?: string };
+
+function normalizeLocation(raw: RawLocation | null | undefined) {
+  if (!raw?.coordinates?.length) return undefined;
+  return { lat: raw.coordinates[1] ?? 0, lng: raw.coordinates[0] ?? 0, address: raw.address ?? "" };
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -57,10 +64,15 @@ export async function PATCH(
   await listing.save();
 
   const updated = await FoodListing.findById(id)
-    .populate("donorId", "name phone address location")
-    .populate("claimedBy", "name phone address location")
-    .populate("assignedVolunteer", "name phone")
+    .populate("donorId", "name phone email address location")
+    .populate("claimedBy", "name phone email address location")
+    .populate("assignedVolunteer", "name phone email")
     .lean();
+
+  const normalizedListing = {
+    ...updated,
+    location: normalizeLocation(updated?.location as RawLocation | undefined),
+  };
 
   const message =
     newStatus === "picked_up"
@@ -76,5 +88,5 @@ export async function PATCH(
       : Promise.resolve(),
   ]);
 
-  return NextResponse.json({ listing: updated });
+  return NextResponse.json({ listing: normalizedListing });
 }

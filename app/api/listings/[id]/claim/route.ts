@@ -7,6 +7,13 @@ import { connectMongo } from "@/lib/mongodb";
 import { sendNotification } from "@/lib/notify";
 import FoodListing from "@/models/FoodListing";
 
+type RawLocation = { coordinates?: number[]; address?: string };
+
+function normalizeLocation(raw: RawLocation | null | undefined) {
+  if (!raw?.coordinates?.length) return undefined;
+  return { lat: raw.coordinates[1] ?? 0, lng: raw.coordinates[0] ?? 0, address: raw.address ?? "" };
+}
+
 export async function POST(
   _: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -36,9 +43,14 @@ export async function POST(
   await listing.save();
 
   const updatedListing = await FoodListing.findById(id)
-    .populate("claimedBy", "name phone")
-    .populate("donorId", "name phone address")
+    .populate("claimedBy", "name phone email")
+    .populate("donorId", "name phone email address")
     .lean();
+
+  const normalizedListing = {
+    ...updatedListing,
+    location: normalizeLocation(updatedListing?.location as RawLocation | undefined),
+  };
 
   // Notify the donor
   void sendNotification({
@@ -48,5 +60,5 @@ export async function POST(
     listingId: id,
   });
 
-  return NextResponse.json({ listing: updatedListing });
+  return NextResponse.json({ listing: normalizedListing });
 }

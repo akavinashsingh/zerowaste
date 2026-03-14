@@ -34,6 +34,14 @@ function normalizeFoodItems(foodItems: unknown) {
     .filter((item) => item.name && item.quantity && item.unit);
 }
 
+  function parseMealCount(rawQuantity: string): number {
+    const match = rawQuantity.match(/[0-9]+(?:\.[0-9]+)?/);
+    if (!match) return 0;
+
+    const value = Number.parseFloat(match[0]);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
@@ -44,6 +52,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const foodItems = normalizeFoodItems(body.foodItems);
   const totalQuantity = String(body.totalQuantity ?? "").trim();
+    const totalMeals = parseMealCount(totalQuantity);
   const foodType = String(body.foodType ?? "").trim();
   const expiresAt = new Date(body.expiresAt);
   const images = Array.isArray(body.images)
@@ -82,6 +91,7 @@ export async function POST(request: Request) {
     donorAddress: donor.address,
     foodItems,
     totalQuantity,
+      totalMeals,
     foodType,
     expiresAt,
     images,

@@ -58,6 +58,9 @@ export const GET = adminOnly(async () => {
       { $match: { status: "delivered" } },
       {
         $project: {
+          numericMeals: {
+            $ifNull: ["$totalMeals", null],
+          },
           quantityMatch: {
             $regexFind: {
               input: "$totalQuantity",
@@ -71,7 +74,11 @@ export const GET = adminOnly(async () => {
           _id: null,
           totalMeals: {
             $sum: {
-              $toDouble: { $ifNull: ["$quantityMatch.match", "0"] },
+              $cond: [
+                { $ne: ["$numericMeals", null] },
+                "$numericMeals",
+                { $toDouble: { $ifNull: ["$quantityMatch.match", "0"] } },
+              ],
             },
           },
         },

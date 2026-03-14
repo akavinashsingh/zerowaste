@@ -16,6 +16,7 @@ export interface IFoodListing extends Document {
   donorAddress: string;
   foodItems: FoodItem[];
   totalQuantity: string;
+  totalMeals: number;
   foodType: FoodType;
   expiresAt: Date;
   images: string[];
@@ -51,6 +52,7 @@ const FoodListingSchema = new Schema<IFoodListing>({
   donorAddress: { type: String, required: true, trim: true },
   foodItems: { type: [FoodItemSchema], required: true },
   totalQuantity: { type: String, required: true, trim: true },
+  totalMeals: { type: Number, required: true, min: 0, default: 0, index: true },
   foodType: { type: String, enum: ["cooked", "packaged", "raw"], required: true },
   expiresAt: { type: Date, required: true, index: true },
   images: { type: [String], default: [] },

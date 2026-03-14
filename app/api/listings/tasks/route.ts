@@ -34,13 +34,7 @@ export async function GET(request: Request) {
     .populate("claimedBy", "name phone address location")
     .lean();
 
-  type TaskWithDistance = (typeof rawTasks)[number] & {
-    location: { lat: number; lng: number; address: string };
-    distanceToPickup?: number;
-    distanceToDrop?: number;
-  };
-
-  const tasks: TaskWithDistance[] = rawTasks.map((task) => {
+  const tasks = rawTasks.map((task) => {
     const normalLoc = normalizeLocation(task.location as unknown as RawLocation);
     let distanceToPickup: number | undefined;
     let distanceToDrop: number | undefined;

@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
@@ -30,7 +31,7 @@ export async function POST(
   }
 
   listing.status = "claimed";
-  listing.claimedBy = session.user.id;
+  listing.claimedBy = new Types.ObjectId(session.user.id);
   listing.claimedAt = new Date();
   await listing.save();
 

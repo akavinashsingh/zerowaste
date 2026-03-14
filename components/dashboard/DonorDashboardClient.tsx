@@ -3,6 +3,8 @@
 import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 
+import LocationPickerMap from "@/components/maps/LocationPickerMap";
+
 type FoodType = "cooked" | "packaged" | "raw";
 type ListingStatus = "available" | "claimed" | "picked_up" | "delivered" | "expired";
 
@@ -67,6 +69,9 @@ export default function DonorDashboardClient({ donorName }: { donorName: string 
   const [error, setError] = useState<string | null>(null);
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const [nearbyNgoCount, setNearbyNgoCount] = useState<number | null>(null);
+  const parsedLat = Number(lat);
+  const parsedLng = Number(lng);
+  const hasCoords = !Number.isNaN(parsedLat) && !Number.isNaN(parsedLng) && lat.trim() && lng.trim();
 
   async function loadListings() {
     setIsFetchingListings(true);
@@ -419,6 +424,18 @@ export default function DonorDashboardClient({ donorName }: { donorName: string 
                     >
                       Use My Location
                     </button>
+                  </div>
+
+                  <p className="mt-3 text-xs text-[color:var(--muted)]">Click on the map to set coordinates for pickup.</p>
+                  <div className="mt-3">
+                    <LocationPickerMap
+                      lat={hasCoords ? parsedLat : undefined}
+                      lng={hasCoords ? parsedLng : undefined}
+                      onPick={(coords) => {
+                        setLat(coords.lat.toFixed(6));
+                        setLng(coords.lng.toFixed(6));
+                      }}
+                    />
                   </div>
 
                   <label className="mt-4 block text-sm font-medium text-[color:var(--foreground)]">

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 
+import RouteMap, { getRouteMetrics } from "@/components/maps/RouteMap";
+
 type ListingStatus = "available" | "claimed" | "picked_up" | "delivered" | "expired";
 
 type Contact = {
@@ -99,6 +101,7 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
   const [isAccepting, setIsAccepting] = useState<Record<string, boolean>>({});
   const [isUpdating, setIsUpdating] = useState<Record<string, boolean>>({});
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [routeTask, setRouteTask] = useState<Task | null>(null);
 
   const volunteerLocation = sessionUser.location;
 
@@ -188,6 +191,16 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
 
   const activeTasks = myTasks.filter((t) => t.status === "claimed" || t.status === "picked_up");
   const completedTasks = myTasks.filter((t) => t.status === "delivered");
+  const routeMetrics = routeTask && routeTask.claimedBy?.location
+    ? getRouteMetrics(
+      { lat: routeTask.location.lat, lng: routeTask.location.lng, label: "Pickup" },
+      {
+        lat: routeTask.claimedBy.location.lat,
+        lng: routeTask.claimedBy.location.lng,
+        label: "Dropoff",
+      },
+    )
+    : null;
 
   return (
     <div className="min-h-screen px-4 py-8 sm:px-6 lg:px-10">
@@ -337,6 +350,7 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
                       task={task}
                       isUpdating={isUpdating[task._id] ?? false}
                       onStatusUpdate={handleStatusUpdate}
+                      onViewRoute={(selectedTask) => setRouteTask(selectedTask)}
                     />
                   ))}
                 </div>
@@ -355,6 +369,38 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
           </div>
         </section>
       </div>
+
+      {routeTask && routeTask.claimedBy?.location ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-4xl rounded-3xl bg-white p-6">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-semibold text-[color:var(--foreground)]">Route: Pickup to Drop-off</h3>
+                <p className="text-sm text-[color:var(--muted)]">
+                  {routeMetrics ? `Distance ${routeMetrics.distanceKm.toFixed(2)} km · ETA ${routeMetrics.etaLabel}` : "Route details"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRouteTask(null)}
+                className="rounded-full border border-[color:var(--border)] px-3 py-1.5 text-sm"
+              >
+                Close
+              </button>
+            </div>
+
+            <RouteMap
+              pickup={{ lat: routeTask.location.lat, lng: routeTask.location.lng, label: `${routeTask.donorName} (Pickup)` }}
+              dropoff={{
+                lat: routeTask.claimedBy.location.lat,
+                lng: routeTask.claimedBy.location.lng,
+                label: `${routeTask.claimedBy.name} (Drop-off)`,
+              }}
+              volunteer={volunteerLocation}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -371,10 +417,12 @@ function ActiveTaskCard({
   task,
   isUpdating,
   onStatusUpdate,
+  onViewRoute,
 }: {
   task: Task;
   isUpdating: boolean;
   onStatusUpdate: (id: string, status: "picked_up" | "delivered") => void;
+  onViewRoute: (task: Task) => void;
 }) {
   return (
     <article className="rounded-3xl border border-[color:var(--border)] bg-white/85 p-5 shadow-sm">
@@ -401,6 +449,15 @@ function ActiveTaskCard({
           {formatDateTime(task.expiresAt)}
         </div>
       </div>
+
+      <button
+        type="button"
+        disabled={!task.claimedBy?.location}
+        onClick={() => onViewRoute(task)}
+        className="mt-4 w-full rounded-full border border-[color:var(--border)] bg-white px-4 py-2.5 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        View Route
+      </button>
 
       {task.status === "claimed" && (
         <button

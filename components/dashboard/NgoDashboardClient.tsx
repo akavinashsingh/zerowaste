@@ -5,6 +5,8 @@ import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useMemo, useState, useEffect, useCallback } from "react";
 
+import ListingsMap from "@/components/maps/ListingsMap";
+
 type FoodTypeFilter = "all" | "cooked" | "packaged" | "raw";
 type SortMode = "newest" | "expiring" | "nearest";
 type ListingStatus = "available" | "claimed" | "picked_up" | "delivered" | "expired";
@@ -96,6 +98,7 @@ function formatDateTime(value: string) {
 
 export default function NgoDashboardClient({ sessionUser }: { sessionUser: SessionUser }) {
   const [activeTab, setActiveTab] = useState<"available" | "claims">("available");
+  const [availableView, setAvailableView] = useState<"card" | "map">("card");
   const [availableListings, setAvailableListings] = useState<Listing[]>([]);
   const [claimedListings, setClaimedListings] = useState<Listing[]>([]);
   const [filterFoodType, setFilterFoodType] = useState<FoodTypeFilter>("all");
@@ -105,6 +108,7 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [selectedMapListing, setSelectedMapListing] = useState<Listing | null>(null);
 
   const ngoLocation = sessionUser.location;
 
@@ -194,10 +198,12 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
         throw new Error(data.error || "Unable to claim listing.");
       }
 
+      const claimedListing = data.listing;
+
       setAvailableListings((current) =>
         current.map((item) => (item._id === listingId ? { ...item, status: "claimed" } : item)),
       );
-      setClaimedListings((current) => [data.listing, ...current]);
+      setClaimedListings((current) => [claimedListing, ...current]);
       setBannerMessage("Listing claimed successfully.");
 
       window.setTimeout(() => {
@@ -278,6 +284,31 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
 
           {activeTab === "available" ? (
             <>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAvailableView("card")}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    availableView === "card"
+                      ? "bg-[color:var(--accent)] text-white"
+                      : "border border-[color:var(--border)] bg-white/70"
+                  }`}
+                >
+                  Card View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvailableView("map")}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    availableView === "map"
+                      ? "bg-[color:var(--accent)] text-white"
+                      : "border border-[color:var(--border)] bg-white/70"
+                  }`}
+                >
+                  Map View
+                </button>
+              </div>
+
               <div className="mt-6 grid gap-4 rounded-3xl border border-[color:var(--border)] bg-white/70 p-4 md:grid-cols-2 lg:grid-cols-3">
                 <label className="text-sm font-medium text-[color:var(--foreground)]">
                   Filter by food type
@@ -309,6 +340,56 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
               {isLoading ? (
                 <div className="mt-6 rounded-3xl border border-dashed border-[color:var(--border)] bg-white/40 px-6 py-12 text-center text-sm text-[color:var(--muted)]">
                   Loading available listings...
+                </div>
+              ) : availableView === "map" ? (
+                <div className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                  <ListingsMap
+                    listings={filteredAvailableListings}
+                    userLocation={ngoLocation}
+                    onListingClick={(listing) => {
+                      const selected = filteredAvailableListings.find((item) => item._id === listing._id) ?? null;
+                      setSelectedMapListing(selected);
+                    }}
+                  />
+
+                  <aside className="rounded-3xl border border-[color:var(--border)] bg-white/85 p-5 shadow-sm">
+                    {selectedMapListing ? (
+                      <div className="space-y-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="text-lg font-semibold text-[color:var(--foreground)]">{selectedMapListing.donorName}</h3>
+                            <p className="text-sm text-[color:var(--muted)]">{selectedMapListing.location.address}</p>
+                          </div>
+                          <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${statusClasses[selectedMapListing.status]}`}>
+                            {selectedMapListing.status.replace("_", " ")}
+                          </span>
+                        </div>
+
+                        <ul className="space-y-1 text-sm text-[color:var(--muted)]">
+                          {selectedMapListing.foodItems.map((item, index) => (
+                            <li key={`${selectedMapListing._id}-map-item-${index}`}>
+                              {item.name}: {item.quantity} {item.unit}
+                            </li>
+                          ))}
+                        </ul>
+
+                        <p className="text-sm text-[color:var(--muted)]">Expiry: {formatDateTime(selectedMapListing.expiresAt)}</p>
+
+                        <button
+                          type="button"
+                          disabled={isClaimLoading[selectedMapListing._id] || selectedMapListing.status !== "available"}
+                          onClick={() => void handleClaimListing(selectedMapListing._id)}
+                          className="w-full rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isClaimLoading[selectedMapListing._id] ? "Claiming..." : selectedMapListing.status === "available" ? "Claim" : "View"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-[color:var(--border)] bg-white/50 px-4 py-10 text-center text-sm text-[color:var(--muted)]">
+                        Select a listing marker to see full details and claim.
+                      </div>
+                    )}
+                  </aside>
                 </div>
               ) : filteredAvailableListings.length ? (
                 <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">

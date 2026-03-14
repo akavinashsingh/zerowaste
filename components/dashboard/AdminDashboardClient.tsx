@@ -14,6 +14,8 @@ import {
   YAxis,
 } from "recharts";
 
+import AdminLiveMap from "@/components/maps/AdminLiveMap";
+
 type ListingStatus = "available" | "claimed" | "picked_up" | "delivered" | "expired";
 type UserRole = "donor" | "ngo" | "volunteer" | "admin";
 
@@ -50,6 +52,7 @@ type UserRow = {
   isActive: boolean;
   phone: string;
   address: string;
+  location?: { lat: number; lng: number };
   createdAt: string;
   listingCounts: {
     donor: number;
@@ -112,6 +115,7 @@ type ListingResponse = {
 };
 
 type RoleFilter = "all" | "donor" | "ngo" | "volunteer";
+type DashboardTab = "overview" | "live-map";
 
 const statusClasses: Record<ListingStatus, string> = {
   available: "bg-green-100 text-green-800",
@@ -151,6 +155,7 @@ function DashboardCard({ title, value, sub }: { title: string; value: string | n
 }
 
 export default function AdminDashboardClient() {
+  const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
 
@@ -171,6 +176,11 @@ export default function AdminDashboardClient() {
   const [isLoadingListings, setIsLoadingListings] = useState(true);
   const [isSavingUser, setIsSavingUser] = useState<Record<string, boolean>>({});
   const [isSavingListing, setIsSavingListing] = useState<Record<string, boolean>>({});
+  const [isLoadingLiveMap, setIsLoadingLiveMap] = useState(false);
+
+  const [liveMapListings, setLiveMapListings] = useState<ListingRow[]>([]);
+  const [liveMapNgos, setLiveMapNgos] = useState<UserRow[]>([]);
+  const [liveMapVolunteers, setLiveMapVolunteers] = useState<UserRow[]>([]);
 
   const [selectedListing, setSelectedListing] = useState<ListingRow | null>(null);
 
@@ -273,6 +283,47 @@ export default function AdminDashboardClient() {
   useEffect(() => {
     void loadListings();
   }, [loadListings]);
+
+  const loadLiveMapData = useCallback(async () => {
+    setIsLoadingLiveMap(true);
+
+    try {
+      const [listingsRes, ngosRes, volunteersRes] = await Promise.all([
+        fetch("/api/admin/listings?status=active&page=1&limit=200", { cache: "no-store" }),
+        fetch("/api/admin/users?role=ngo&page=1&limit=200", { cache: "no-store" }),
+        fetch("/api/admin/users?role=volunteer&page=1&limit=200", { cache: "no-store" }),
+      ]);
+
+      const listingsData = (await listingsRes.json()) as ListingResponse & { error?: string };
+      const ngosData = (await ngosRes.json()) as UserResponse & { error?: string };
+      const volunteersData = (await volunteersRes.json()) as UserResponse & { error?: string };
+
+      if (!listingsRes.ok) {
+        throw new Error(listingsData.error || "Unable to load active listings for map.");
+      }
+
+      if (!ngosRes.ok) {
+        throw new Error(ngosData.error || "Unable to load NGOs for map.");
+      }
+
+      if (!volunteersRes.ok) {
+        throw new Error(volunteersData.error || "Unable to load volunteers for map.");
+      }
+
+      setLiveMapListings(listingsData.listings ?? []);
+      setLiveMapNgos(ngosData.users ?? []);
+      setLiveMapVolunteers(volunteersData.users ?? []);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Unable to load live map data.");
+    } finally {
+      setIsLoadingLiveMap(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "live-map") return;
+    void loadLiveMapData();
+  }, [activeTab, loadLiveMapData]);
 
   async function updateUserRole(userId: string, role: UserRole) {
     setIsSavingUser((s) => ({ ...s, [userId]: true }));
@@ -400,7 +451,35 @@ export default function AdminDashboardClient() {
           <p className="mt-2 max-w-3xl text-sm text-[color:var(--muted)]">
             Monitor listing operations, user health, and delivery impact across the entire platform.
           </p>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("overview")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                activeTab === "overview"
+                  ? "bg-[color:var(--accent)] text-white"
+                  : "border border-[color:var(--border)] bg-white text-[color:var(--foreground)]"
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("live-map")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                activeTab === "live-map"
+                  ? "bg-[color:var(--accent)] text-white"
+                  : "border border-[color:var(--border)] bg-white text-[color:var(--foreground)]"
+              }`}
+            >
+              Live Map
+            </button>
+          </div>
         </section>
+
+        {activeTab === "overview" ? (
+          <>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <DashboardCard title="Total Listings" value={isLoadingStats ? "..." : stats?.totalListings ?? 0} />
@@ -670,6 +749,43 @@ export default function AdminDashboardClient() {
             onNext={() => setListingPage((p) => p + 1)}
           />
         </section>
+
+          </>
+        ) : (
+          <section className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface)] p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xl font-semibold text-[color:var(--foreground)]">Live Map</h2>
+              <button
+                type="button"
+                onClick={() => void loadLiveMapData()}
+                disabled={isLoadingLiveMap}
+                className="rounded-full border border-[color:var(--border)] bg-white px-4 py-2 text-sm font-semibold"
+              >
+                {isLoadingLiveMap ? "Refreshing..." : "Refresh Map"}
+              </button>
+            </div>
+
+            <p className="mb-4 text-sm text-[color:var(--muted)]">
+              Red = Donor listing, Blue = NGO, Green = Volunteer
+            </p>
+
+            <AdminLiveMap
+              listings={liveMapListings}
+              ngos={liveMapNgos.map((user) => ({
+                _id: user._id,
+                name: user.name,
+                role: "ngo",
+                location: user.location,
+              }))}
+              volunteers={liveMapVolunteers.map((user) => ({
+                _id: user._id,
+                name: user.name,
+                role: "volunteer",
+                location: user.location,
+              }))}
+            />
+          </section>
+        )}
 
         {selectedListing ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

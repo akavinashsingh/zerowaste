@@ -8,6 +8,13 @@ import User from "@/models/User";
 
 const allowedRoles = new Set(["donor", "ngo", "volunteer", "admin"]);
 
+type RawLocation = { coordinates?: number[] };
+
+function normalizeLocation(raw: RawLocation | null | undefined) {
+  if (!raw?.coordinates?.length) return undefined;
+  return { lat: raw.coordinates[1] ?? 0, lng: raw.coordinates[0] ?? 0 };
+}
+
 function parsePositiveInt(value: string | null, fallback: number, max: number) {
   const parsed = Number.parseInt(value ?? "", 10);
   if (Number.isNaN(parsed) || parsed < 1) {
@@ -50,7 +57,7 @@ export const GET = adminOnly(async (request) => {
   const [total, users] = await Promise.all([
     User.countDocuments(filter),
     User.find(filter)
-      .select("name email role isActive phone address createdAt")
+      .select("name email role isActive phone address createdAt location")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -95,6 +102,7 @@ export const GET = adminOnly(async (request) => {
       isActive: user.isActive !== false,
       phone: user.phone,
       address: user.address,
+      location: normalizeLocation(user.location as RawLocation | undefined),
       createdAt: user.createdAt,
       listingCounts: {
         donor: donorCountMap.get(id) ?? 0,

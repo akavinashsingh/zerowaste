@@ -6,6 +6,13 @@ import FoodListing from "@/models/FoodListing";
 
 const allowedStatuses = new Set(["available", "claimed", "picked_up", "delivered", "expired"]);
 
+type RawLocation = { coordinates?: number[]; address?: string };
+
+function normalizeLocation(raw: RawLocation | null | undefined) {
+  if (!raw?.coordinates?.length) return undefined;
+  return { lat: raw.coordinates[1] ?? 0, lng: raw.coordinates[0] ?? 0, address: raw.address ?? "" };
+}
+
 function parsePositiveInt(value: string | null, fallback: number, max: number) {
   const parsed = Number.parseInt(value ?? "", 10);
   if (Number.isNaN(parsed) || parsed < 1) {
@@ -29,7 +36,18 @@ export const GET = adminOnly(async (request) => {
 
   const filter: Record<string, unknown> = {};
 
-  if (status && allowedStatuses.has(status)) {
+  if (status === "active") {
+    filter.status = { $in: ["available", "claimed", "picked_up"] };
+  } else if (status.includes(",")) {
+    const statuses = status
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => allowedStatuses.has(value));
+
+    if (statuses.length) {
+      filter.status = { $in: statuses };
+    }
+  } else if (status && allowedStatuses.has(status)) {
     filter.status = status;
   }
 
@@ -57,8 +75,13 @@ export const GET = adminOnly(async (request) => {
       .lean(),
   ]);
 
+  const normalizedListings = listings.map((listing) => ({
+    ...listing,
+    location: normalizeLocation(listing.location as RawLocation | undefined),
+  }));
+
   return NextResponse.json({
-    listings,
+    listings: normalizedListings,
     pagination: {
       page,
       limit,

@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
@@ -36,7 +37,7 @@ export async function POST(
     return NextResponse.json({ error: "A volunteer has already been assigned to this task." }, { status: 400 });
   }
 
-  listing.assignedVolunteer = session.user.id;
+  listing.assignedVolunteer = new Types.ObjectId(session.user.id);
   listing.volunteerAssignedAt = new Date();
   await listing.save();
 

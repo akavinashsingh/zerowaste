@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import type { PipelineStage } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
@@ -77,6 +78,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Location details are required." }, { status: 400 });
   }
 
+  const locationLat = location.lat;
+  const locationLng = location.lng;
+  const locationAddress = String(location.address).trim();
+
   await connectMongo();
   const donor = await User.findById(session.user.id).lean();
 
@@ -91,13 +96,13 @@ export async function POST(request: Request) {
     donorAddress: donor.address,
     foodItems,
     totalQuantity,
-      totalMeals,
+    totalMeals,
     foodType,
     expiresAt,
     images,
     location: {
-      ...coordinatesToGeoJSON(location.lat, location.lng),
-      address: String(location.address).trim(),
+      ...coordinatesToGeoJSON(locationLat, locationLng),
+      address: locationAddress,
     },
   });
 
@@ -109,7 +114,7 @@ export async function POST(request: Request) {
       const nearbyNgos = await User.aggregate<{ _id: { toString(): string }; name: string; distanceMeters: number }>([
         {
           $geoNear: {
-            near: { type: "Point", coordinates: [location.lng, location.lat] },
+            near: { type: "Point", coordinates: [locationLng, locationLat] },
             distanceField: "distanceMeters",
             maxDistance: 10000,
             spherical: true,
@@ -165,7 +170,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Invalid location parameters." }, { status: 400 });
     }
 
-    const pipeline = [
+    const pipeline: PipelineStage[] = [
       {
         $geoNear: {
           near: { type: "Point", coordinates: [lng, lat] },

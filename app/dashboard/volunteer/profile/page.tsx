@@ -1,19 +1,19 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
-import NgoDashboardClient from "@/components/dashboard/NgoDashboardClient";
 import { authOptions } from "@/lib/auth";
+import VolunteerProfileClient from "@/components/dashboard/VolunteerProfileClient";
 
-export default async function NgoDashboardPage() {
+export default async function VolunteerProfilePage() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
     redirect("/login");
   }
 
-  if (session.user.role !== "ngo") {
+  if (session.user.role !== "volunteer") {
     redirect(`/dashboard/${session.user.role}`);
   }
 
-  return <NgoDashboardClient sessionUser={session.user} />;
+  return <VolunteerProfileClient sessionUser={session.user} />;
 }

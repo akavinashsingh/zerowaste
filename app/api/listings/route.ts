@@ -97,7 +97,7 @@ export async function GET() {
 
   const listings = await FoodListing.find({ status: "available" })
     .sort({ createdAt: -1 })
-    .select("donorName donorAddress foodItems expiresAt totalQuantity status createdAt")
+    .select("donorName donorAddress foodItems expiresAt totalQuantity foodType images location status createdAt")
     .lean();
 
   return NextResponse.json({ listings });

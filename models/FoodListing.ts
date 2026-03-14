@@ -26,7 +26,11 @@ export interface IFoodListing extends Document {
   };
   status: ListingStatus;
   claimedBy?: Types.ObjectId;
+  claimedAt?: Date;
   assignedVolunteer?: Types.ObjectId;
+  volunteerAssignedAt?: Date;
+  pickedUpAt?: Date;
+  deliveredAt?: Date;
   createdAt: Date;
 }
 
@@ -61,7 +65,11 @@ const FoodListingSchema = new Schema<IFoodListing>({
     index: true,
   },
   claimedBy: { type: Schema.Types.ObjectId, ref: "User" },
-  assignedVolunteer: { type: Schema.Types.ObjectId, ref: "User" },
+  claimedAt: { type: Date, index: true },
+  assignedVolunteer: { type: Schema.Types.ObjectId, ref: "User", index: true },
+  volunteerAssignedAt: { type: Date, index: true },
+  pickedUpAt: { type: Date },
+  deliveredAt: { type: Date },
   createdAt: { type: Date, default: Date.now, index: true },
 });
 

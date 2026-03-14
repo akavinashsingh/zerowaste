@@ -42,6 +42,9 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           email: user.email,
           role: user.role,
+          phone: user.phone,
+          address: user.address,
+          location: user.location,
         };
       },
     }),
@@ -51,6 +54,9 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.phone = user.phone;
+        token.address = user.address;
+        token.location = user.location;
       }
 
       return token;
@@ -59,6 +65,9 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as "donor" | "ngo" | "volunteer" | "admin";
+        session.user.phone = token.phone as string | undefined;
+        session.user.address = token.address as string | undefined;
+        session.user.location = token.location as { lat: number; lng: number } | undefined;
       }
 
       return session;

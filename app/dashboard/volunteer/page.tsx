@@ -1,11 +1,19 @@
-"use client";
-import { signOut } from "next-auth/react";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 
-export default function VolunteerDashboard() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
-      <h1 className="text-3xl font-bold mb-4">Welcome, Volunteer</h1>
-      <button className="bg-red-500 text-white px-4 py-2 rounded" onClick={() => signOut()}>Logout</button>
-    </div>
-  );
+import VolunteerDashboardClient from "@/components/dashboard/VolunteerDashboardClient";
+import { authOptions } from "@/lib/auth";
+
+export default async function VolunteerDashboardPage() {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  if (session.user.role !== "volunteer") {
+    redirect(`/dashboard/${session.user.role}`);
+  }
+
+  return <VolunteerDashboardClient sessionUser={session.user} />;
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
+import { coordinatesToGeoJSON } from "@/lib/distance";
 import User from "@/models/User";
 
 export async function PATCH(request: Request) {
@@ -41,7 +42,7 @@ export async function PATCH(request: Request) {
         name,
         phone,
         address,
-        location: { lat, lng },
+        location: coordinatesToGeoJSON(lat, lng),
       },
     },
     {

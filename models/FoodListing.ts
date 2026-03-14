@@ -19,9 +19,10 @@ export interface IFoodListing extends Document {
   foodType: FoodType;
   expiresAt: Date;
   images: string[];
+  /** GeoJSON Point — coordinates: [lng, lat] */
   location: {
-    lat: number;
-    lng: number;
+    type: string;
+    coordinates: [number, number];
     address: string;
   };
   status: ListingStatus;
@@ -54,8 +55,8 @@ const FoodListingSchema = new Schema<IFoodListing>({
   expiresAt: { type: Date, required: true, index: true },
   images: { type: [String], default: [] },
   location: {
-    lat: { type: Number, required: true },
-    lng: { type: Number, required: true },
+    type: { type: String, default: 'Point' },
+    coordinates: { type: [Number], required: true },
     address: { type: String, required: true, trim: true },
   },
   status: {
@@ -72,7 +73,7 @@ const FoodListingSchema = new Schema<IFoodListing>({
   deliveredAt: { type: Date },
   createdAt: { type: Date, default: Date.now, index: true },
 });
-
+FoodListingSchema.index({ location: '2dsphere' });
 const FoodListing: Model<IFoodListing> =
   mongoose.models.FoodListing || mongoose.model<IFoodListing>("FoodListing", FoodListingSchema);
 

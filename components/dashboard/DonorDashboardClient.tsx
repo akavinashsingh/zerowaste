@@ -66,6 +66,7 @@ export default function DonorDashboardClient({ donorName }: { donorName: string 
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
+  const [nearbyNgoCount, setNearbyNgoCount] = useState<number | null>(null);
 
   async function loadListings() {
     setIsFetchingListings(true);
@@ -89,6 +90,22 @@ export default function DonorDashboardClient({ donorName }: { donorName: string 
   useEffect(() => {
     void loadListings();
   }, []);
+
+  useEffect(() => {
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (!lat || !lng || isNaN(latNum) || isNaN(lngNum)) return;
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/match/nearby-ngos?lat=${latNum}&lng=${lngNum}&radiusKm=10`);
+        const data = (await res.json()) as { ngos?: unknown[] };
+        setNearbyNgoCount(data.ngos?.length ?? 0);
+      } catch {
+        // Silent fail — non-critical
+      }
+    })();
+  }, [lat, lng]);
 
   function updateFoodItem(index: number, field: keyof FoodItemInput, value: string) {
     setFoodItems((current) =>
@@ -440,6 +457,12 @@ export default function DonorDashboardClient({ donorName }: { donorName: string 
                   </div>
 
                   {geoStatus ? <p className="mt-3 text-sm text-[color:var(--muted)]">{geoStatus}</p> : null}
+
+                  {nearbyNgoCount !== null ? (
+                    <p className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                      📍 {nearbyNgoCount} NGO{nearbyNgoCount !== 1 ? "s" : ""} found within 10 km of your location
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">

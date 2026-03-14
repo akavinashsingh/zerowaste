@@ -4,8 +4,6 @@ import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 
-import { getDistanceKm } from "@/lib/distance";
-
 type ListingStatus = "available" | "claimed" | "picked_up" | "delivered" | "expired";
 
 type Contact = {
@@ -34,6 +32,10 @@ type Task = {
   volunteerAssignedAt?: string;
   pickedUpAt?: string;
   deliveredAt?: string;
+  /** Distance from volunteer's current location to the donor pickup point (km). */
+  distanceToPickup?: number;
+  /** Distance from volunteer's current location to the NGO drop-off point (km). */
+  distanceToDrop?: number;
 };
 
 type SessionUser = {
@@ -115,8 +117,12 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
   const loadAll = useCallback(async () => {
     setIsLoading(true);
     try {
+      const tasksUrl = volunteerLocation
+        ? `/api/listings/tasks?lat=${volunteerLocation.lat}&lng=${volunteerLocation.lng}`
+        : "/api/listings/tasks";
+
       const [tasksRes, myTasksRes] = await Promise.all([
-        fetch("/api/listings/tasks", { cache: "no-store" }),
+        fetch(tasksUrl, { cache: "no-store" }),
         fetch("/api/listings/my-tasks", { cache: "no-store" }),
       ]);
       const tasksData = (await tasksRes.json()) as { tasks?: Task[] };
@@ -128,7 +134,7 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [volunteerLocation]);
 
   useEffect(() => {
     void loadAll();
@@ -288,17 +294,22 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
                             <p className="font-medium text-[color:var(--foreground)]">Pickup from</p>
                             <p className="text-[color:var(--muted)]">{task.donorId?.name ?? task.donorName}</p>
                             <p className="text-[color:var(--muted)]">{task.location.address}</p>
-                            {volunteerLocation && task.location && (
+                            {task.distanceToPickup !== undefined ? (
                               <p className="mt-1 text-xs text-[color:var(--muted)]">
-                                ~{getDistanceKm(volunteerLocation.lat, volunteerLocation.lng, task.location.lat, task.location.lng)} km away
+                                ~{task.distanceToPickup} km to pickup
                               </p>
-                            )}
+                            ) : null}
                           </div>
                           <div>
                             <p className="font-medium text-[color:var(--foreground)]">Drop-off at</p>
                             <p className="text-[color:var(--muted)]">
                               {task.claimedBy?.address ?? "NGO address not available"}
                             </p>
+                            {task.distanceToDrop !== undefined ? (
+                              <p className="mt-1 text-xs text-[color:var(--muted)]">
+                                ~{task.distanceToDrop} km to drop-off
+                              </p>
+                            ) : null}
                           </div>
                         </div>
 

@@ -9,9 +9,10 @@ export interface IUser extends Document {
   role: UserRole;
   phone: string;
   address: string;
-  location: {
-    lat: number;
-    lng: number;
+  /** GeoJSON Point — coordinates: [lng, lat] */
+  location?: {
+    type: string;
+    coordinates: [number, number];
   };
   createdAt: Date;
 }
@@ -24,10 +25,12 @@ const UserSchema = new Schema<IUser>({
   phone: { type: String, required: true },
   address: { type: String, required: true },
   location: {
-    lat: { type: Number, required: true },
-    lng: { type: Number, required: true },
+    type: { type: String, default: 'Point' },
+    coordinates: { type: [Number] },
   },
   createdAt: { type: Date, default: Date.now },
 });
+
+UserSchema.index({ location: '2dsphere' });
 
 export default mongoose.models.User || mongoose.model<IUser>('User', UserSchema);

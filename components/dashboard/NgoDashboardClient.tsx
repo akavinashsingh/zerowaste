@@ -3,12 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { useMemo, useState, useEffect } from "react";
-
-import { getDistanceKm } from "@/lib/distance";
+import { useMemo, useState, useEffect, useCallback } from "react";
 
 type FoodTypeFilter = "all" | "cooked" | "packaged" | "raw";
-type SortMode = "newest" | "expiring";
+type SortMode = "newest" | "expiring" | "nearest";
 type ListingStatus = "available" | "claimed" | "picked_up" | "delivered" | "expired";
 
 type DonorContact = {
@@ -50,6 +48,7 @@ type Listing = {
   claimedBy?: string;
   claimedAt?: string;
   assignedVolunteer?: VolunteerContact;
+  distanceKm?: number;
   createdAt: string;
 };
 
@@ -100,7 +99,7 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
   const [availableListings, setAvailableListings] = useState<Listing[]>([]);
   const [claimedListings, setClaimedListings] = useState<Listing[]>([]);
   const [filterFoodType, setFilterFoodType] = useState<FoodTypeFilter>("all");
-  const [sortMode, setSortMode] = useState<SortMode>("newest");
+  const [sortMode, setSortMode] = useState<SortMode>(sessionUser.location ? "nearest" : "newest");
   const [isLoading, setIsLoading] = useState(true);
   const [isClaimLoading, setIsClaimLoading] = useState<Record<string, boolean>>({});
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
@@ -119,13 +118,18 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
     };
   }, []);
 
-  async function loadListings() {
+  const loadListings = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
+      const listingsUrl =
+        ngoLocation
+          ? `/api/listings?lat=${ngoLocation.lat}&lng=${ngoLocation.lng}&radiusKm=50`
+          : "/api/listings";
+
       const [availableRes, claimedRes] = await Promise.all([
-        fetch("/api/listings", { cache: "no-store" }),
+        fetch(listingsUrl, { cache: "no-store" }),
         fetch("/api/listings/claimed", { cache: "no-store" }),
       ]);
 
@@ -147,17 +151,21 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [ngoLocation]);
 
   useEffect(() => {
     void loadListings();
-  }, []);
+  }, [loadListings]);
 
   const filteredAvailableListings = useMemo(() => {
     const base = [...availableListings].filter((listing) => (filterFoodType === "all" ? true : listing.foodType === filterFoodType));
 
     if (sortMode === "expiring") {
       return base.sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime());
+    }
+
+    if (sortMode === "nearest") {
+      return base.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
     }
 
     return base.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -292,6 +300,7 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
                     className="mt-2 w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[color:var(--accent)]"
                   >
                     <option value="newest">Newest</option>
+                    <option value="nearest">Nearest First</option>
                     <option value="expiring">Expiring Soon</option>
                   </select>
                 </label>
@@ -338,9 +347,13 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
                         <div className="rounded-2xl bg-[color:var(--surface-strong)] p-3 text-sm text-[color:var(--foreground)]">
                           <p className="font-medium">{getCountdownLabel(listing.expiresAt, now)}</p>
                           <p className="mt-1 text-xs text-[color:var(--muted)]">Pickup deadline: {formatDateTime(listing.expiresAt)}</p>
-                          {ngoLocation ? (
+                          {listing.distanceKm !== undefined ? (
                             <p className="mt-1 text-xs text-[color:var(--muted)]">
-                              Distance: {getDistanceKm(ngoLocation.lat, ngoLocation.lng, listing.location.lat, listing.location.lng)} km
+                              Distance: {listing.distanceKm} km
+                            </p>
+                          ) : ngoLocation ? (
+                            <p className="mt-1 text-xs text-[color:var(--muted)]">
+                              Location data unavailable
                             </p>
                           ) : null}
                         </div>

@@ -3,8 +3,17 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
+import { coordinatesToGeoJSON } from "@/lib/distance";
 import FoodListing from "@/models/FoodListing";
 import User from "@/models/User";
+
+type RawLocation = { type?: string; coordinates?: number[]; address?: string };
+
+/** Convert GeoJSON location back to { lat, lng, address } for client consumption. */
+function normalizeLocation(raw: RawLocation | null | undefined): { lat: number; lng: number; address: string } | undefined {
+  if (!raw?.coordinates?.length) return undefined;
+  return { lat: raw.coordinates[1] ?? 0, lng: raw.coordinates[0] ?? 0, address: raw.address ?? "" };
+}
 
 function normalizeFoodItems(foodItems: unknown) {
   if (!Array.isArray(foodItems) || foodItems.length === 0) {
@@ -76,8 +85,7 @@ export async function POST(request: Request) {
     expiresAt,
     images,
     location: {
-      lat: location.lat,
-      lng: location.lng,
+      ...coordinatesToGeoJSON(location.lat, location.lng),
       address: String(location.address).trim(),
     },
   });
@@ -92,13 +100,63 @@ export async function POST(request: Request) {
   );
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   await connectMongo();
 
-  const listings = await FoodListing.find({ status: "available" })
+  const url = new URL(request.url);
+  const latParam = url.searchParams.get("lat");
+  const lngParam = url.searchParams.get("lng");
+  const radiusKmParam = url.searchParams.get("radiusKm");
+
+  if (latParam && lngParam) {
+    const lat = Number(latParam);
+    const lng = Number(lngParam);
+    const radiusKm = Number(radiusKmParam ?? "50");
+
+    if (isNaN(lat) || isNaN(lng) || isNaN(radiusKm)) {
+      return NextResponse.json({ error: "Invalid location parameters." }, { status: 400 });
+    }
+
+    const pipeline = [
+      {
+        $geoNear: {
+          near: { type: "Point", coordinates: [lng, lat] },
+          distanceField: "distanceMeters",
+          maxDistance: radiusKm * 1000,
+          spherical: true,
+          query: { status: "available" },
+        },
+      },
+      {
+        $addFields: {
+          distanceKm: { $round: [{ $divide: ["$distanceMeters", 1000] }, 2] },
+        },
+      },
+      {
+        $project: {
+          distanceMeters: 0,
+        },
+      },
+    ];
+
+    const rawListings = await FoodListing.aggregate(pipeline);
+    const listings = rawListings.map((doc) => ({
+      ...doc,
+      location: normalizeLocation(doc.location as RawLocation),
+    }));
+
+    return NextResponse.json({ listings });
+  }
+
+  const rawListings = await FoodListing.find({ status: "available" })
     .sort({ createdAt: -1 })
     .select("donorName donorAddress foodItems expiresAt totalQuantity foodType images location status createdAt")
     .lean();
+
+  const listings = rawListings.map((doc) => ({
+    ...doc,
+    location: normalizeLocation(doc.location as unknown as RawLocation),
+  }));
 
   return NextResponse.json({ listings });
 }

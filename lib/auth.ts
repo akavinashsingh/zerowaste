@@ -3,6 +3,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
 import { connectMongo } from "@/lib/mongodb";
+import { geoJSONToLatLng, type GeoJSONPoint } from "@/lib/distance";
 import User from "@/models/User";
 
 export const authOptions: NextAuthOptions = {
@@ -44,7 +45,7 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           phone: user.phone,
           address: user.address,
-          location: user.location,
+          location: user.location ? geoJSONToLatLng(user.location as GeoJSONPoint) : undefined,
         };
       },
     }),

@@ -16,3 +16,15 @@ export function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: nu
 
   return Number((EARTH_RADIUS_KM * c).toFixed(2));
 }
+
+export type GeoJSONPoint = { type: "Point"; coordinates: [number, number] };
+
+/** Convert lat/lng to GeoJSON Point — coordinates are stored as [lng, lat] per GeoJSON spec. */
+export function coordinatesToGeoJSON(lat: number, lng: number): GeoJSONPoint {
+  return { type: "Point", coordinates: [lng, lat] };
+}
+
+/** Extract { lat, lng } from a GeoJSON Point — coordinates are [lng, lat]. */
+export function geoJSONToLatLng(point: GeoJSONPoint): { lat: number; lng: number } {
+  return { lat: point.coordinates[1], lng: point.coordinates[0] };
+}

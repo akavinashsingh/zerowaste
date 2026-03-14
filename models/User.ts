@@ -7,6 +7,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: UserRole;
+  isActive: boolean;
   phone: string;
   address: string;
   /** GeoJSON Point — coordinates: [lng, lat] */
@@ -22,6 +23,7 @@ const UserSchema = new Schema<IUser>({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['donor', 'ngo', 'volunteer', 'admin'], required: true },
+  isActive: { type: Boolean, default: true, index: true },
   phone: { type: String, required: true },
   address: { type: String, required: true },
   location: {

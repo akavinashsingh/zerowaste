@@ -32,6 +32,10 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        if (user.isActive === false) {
+          return null;
+        }
+
         const passwordMatches = await bcrypt.compare(credentials.password, user.password);
 
         if (!passwordMatches) {

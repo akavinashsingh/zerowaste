@@ -27,4 +27,5 @@ These accounts are seeded for local testing.
 ## Notes
 
 - All accounts are active.
+- All seeded accounts use Hyderabad locations for proximity-based matching.
 - Re-run `node ./scripts/seed-test-users.js` to re-seed/update these users.

@@ -135,15 +135,16 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
   const loadListings = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setBannerMessage(null);
 
     try {
-      const listingsUrl =
+      const nearbyUrl =
         ngoLocation
           ? `/api/listings?lat=${ngoLocation.lat}&lng=${ngoLocation.lng}&radiusKm=50`
           : "/api/listings";
 
       const [availableRes, claimedRes] = await Promise.all([
-        fetch(listingsUrl, { cache: "no-store" }),
+        fetch(nearbyUrl, { cache: "no-store" }),
         fetch("/api/listings/claimed", { cache: "no-store" }),
       ]);
 
@@ -158,7 +159,21 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
         throw new Error(claimedData.error || "Unable to load claimed listings.");
       }
 
-      setAvailableListings(availableData.listings ?? []);
+      let visibleListings = availableData.listings ?? [];
+
+      if (ngoLocation && visibleListings.length === 0) {
+        const fallbackRes = await fetch("/api/listings", { cache: "no-store" });
+        const fallbackData = (await fallbackRes.json()) as { listings?: Listing[]; error?: string };
+
+        if (fallbackRes.ok) {
+          visibleListings = fallbackData.listings ?? [];
+          if (visibleListings.length > 0) {
+            setBannerMessage("No nearby listings in 50 km. Showing all available listings.");
+          }
+        }
+      }
+
+      setAvailableListings(visibleListings);
       setClaimedListings(claimedData.listings ?? []);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load listings.");

@@ -2,9 +2,13 @@
 
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
-import { Circle, CircleMarker, MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 
-import { getMapTileUrl, getMarkerIcon } from "@/lib/mapHelpers";
+const MapContainer = dynamic(() => import("react-leaflet").then((module) => module.MapContainer), { ssr: false });
+const TileLayer = dynamic(() => import("react-leaflet").then((module) => module.TileLayer), { ssr: false });
+const Marker = dynamic(() => import("react-leaflet").then((module) => module.Marker), { ssr: false });
+const Popup = dynamic(() => import("react-leaflet").then((module) => module.Popup), { ssr: false });
+const Circle = dynamic(() => import("react-leaflet").then((module) => module.Circle), { ssr: false });
+const CircleMarker = dynamic(() => import("react-leaflet").then((module) => module.CircleMarker), { ssr: false });
 
 type ListingStatus = "available" | "claimed" | "picked_up" | "delivered" | "expired";
 
@@ -56,7 +60,7 @@ function ListingsMapInner({ listings, userLocation, onListingClick }: Props) {
   return (
     <MapContainer center={center} zoom={userLocation ? 11 : 5} className="h-[460px] w-full rounded-3xl" scrollWheelZoom>
       <TileLayer
-        url={getMapTileUrl()}
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
 
@@ -77,7 +81,7 @@ function ListingsMapInner({ listings, userLocation, onListingClick }: Props) {
         const buttonText = listing.status === "available" ? "Claim" : "View";
 
         return (
-          <Marker key={listing._id} position={[loc.lat, loc.lng]} icon={getMarkerIcon("donor")}>
+          <Marker key={listing._id} position={[loc.lat, loc.lng]}>
             <Popup>
               <div className="space-y-2 min-w-[220px]">
                 <p className="text-sm font-semibold text-stone-900">{listing.donorName}</p>

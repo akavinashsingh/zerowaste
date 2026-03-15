@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useMemo, useState, useEffect, useCallback } from "react";
+import { Sparkles, MapPin, RefreshCw, LogOut } from "lucide-react";
 
 import ListingsMap from "@/components/maps/ListingsMap";
 
@@ -63,12 +64,19 @@ type SessionUser = {
   };
 };
 
-const statusClasses: Record<ListingStatus, string> = {
-  available: "bg-green-100 text-green-800",
-  claimed: "bg-yellow-100 text-yellow-800",
-  picked_up: "bg-blue-100 text-blue-800",
-  delivered: "bg-purple-100 text-purple-800",
-  expired: "bg-red-100 text-red-800",
+const statusMeta: Record<ListingStatus, { label: string; color: string; bg: string; dot: string }> = {
+  available: { label: "Available", color: "#1a5c38", bg: "#e8f5ee", dot: "#22c55e" },
+  claimed: { label: "Claimed", color: "#92400e", bg: "#fef3c7", dot: "#f59e0b" },
+  picked_up: { label: "Picked Up", color: "#1e40af", bg: "#dbeafe", dot: "#3b82f6" },
+  delivered: { label: "Delivered", color: "#5b21b6", bg: "#ede9fe", dot: "#8b5cf6" },
+  expired: { label: "Expired", color: "#991b1b", bg: "#fee2e2", dot: "#ef4444" },
+};
+
+const foodMeta: Record<FoodTypeFilter, { label: string; color: string; bg: string }> = {
+  all: { label: "All", color: "#2c2820", bg: "#f3f0ea" },
+  cooked: { label: "Cooked", color: "#c8601a", bg: "#fff7ed" },
+  packaged: { label: "Packaged", color: "#1e40af", bg: "#dbeafe" },
+  raw: { label: "Raw", color: "#1a5c38", bg: "#e8f5ee" },
 };
 
 function getCountdownLabel(expiresAt: string, now: number) {
@@ -109,6 +117,8 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [selectedMapListing, setSelectedMapListing] = useState<Listing | null>(null);
+
+  const ngoDisplayName = sessionUser.name?.trim() || "NGO";
 
   const ngoLocation = sessionUser.location;
 
@@ -175,6 +185,18 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
     return base.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [availableListings, filterFoodType, sortMode]);
 
+  const dashboardStats = useMemo(
+    () => ({
+      available: availableListings.filter((item) => item.status === "available").length,
+      claimed: claimedListings.length,
+      expiringSoon: availableListings.filter((item) => {
+        const diff = new Date(item.expiresAt).getTime() - now;
+        return diff > 0 && diff <= 3 * 60 * 60 * 1000;
+      }).length,
+    }),
+    [availableListings, claimedListings.length, now],
+  );
+
   async function handleClaimListing(listingId: string) {
     setIsClaimLoading((state) => ({ ...state, [listingId]: true }));
     setError(null);
@@ -220,129 +242,165 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
   }
 
   return (
-    <div className="min-h-screen px-4 py-8 sm:px-6 lg:px-10">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <section className="rounded-[2rem] border border-[color:var(--border)] bg-[color:var(--surface)] p-6 shadow-[0_24px_80px_rgba(24,35,15,0.08)] backdrop-blur lg:p-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,300&family=DM+Sans:wght@300;400;500;600&display=swap');
+        .nd { font-family:'DM Sans',sans-serif; background:#f5f3ef; min-height:100vh; padding:2rem 2rem 6rem; }
+        .nd-inner { max-width:1120px; margin:0 auto; }
+
+        .nd-head { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem; }
+        .nd-title { font-family:'Fraunces',serif; font-size:clamp(1.7rem,3vw,2.25rem); font-weight:900; color:#2c2820; letter-spacing:-0.03em; line-height:1.1; }
+        .nd-title span { color:#1e40af; font-style:italic; }
+        .nd-sub { margin-top:6px; font-size:0.86rem; color:#6b6560; font-weight:300; }
+        .nd-out { border:none; border-radius:14px; background:#1e40af; color:#fff; font-size:0.9rem; font-weight:600; padding:0.75rem 1.2rem; cursor:pointer; display:inline-flex; align-items:center; gap:8px; box-shadow:0 4px 14px rgba(30,64,175,0.30); }
+        .nd-out:hover { background:#1d4ed8; }
+
+        .nd-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.5rem; }
+        .nd-stat { background:#fff; border-radius:18px; border:1px solid rgba(44,40,32,0.08); padding:1.2rem 1.4rem; box-shadow:0 1px 4px rgba(44,40,32,0.05); }
+        .nd-stat-lbl { font-size:0.72rem; color:#8a837d; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; }
+        .nd-stat-val { font-family:'Fraunces',serif; font-size:2rem; color:#2c2820; letter-spacing:-0.03em; margin-top:6px; line-height:1; }
+
+        .nd-banner { background:linear-gradient(135deg,#1e40af,#1d4ed8); border-radius:20px; padding:1.25rem 1.4rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.8rem; margin-bottom:1.5rem; }
+        .nd-banner-t { font-family:'Fraunces',serif; color:#fff; font-size:1rem; font-weight:700; }
+        .nd-banner-s { color:rgba(255,255,255,0.75); font-size:0.78rem; }
+        .nd-banner-btn { display:inline-flex; align-items:center; gap:5px; color:#fff; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); border-radius:10px; padding:0.55rem 0.9rem; text-decoration:none; font-size:0.8rem; font-weight:600; }
+
+        .nd-alert { margin-bottom:1rem; border-radius:12px; padding:10px 14px; font-size:0.83rem; }
+        .nd-alert.warn { background:#fef9c3; color:#854d0e; border:1px solid #fde68a; }
+        .nd-alert.err { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+        .nd-alert.ok { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
+
+        .nd-tabs { display:flex; flex-wrap:wrap; gap:0.6rem; margin-bottom:1rem; }
+        .nd-tab { border:1px solid rgba(44,40,32,0.12); background:#fff; color:#6b6560; border-radius:999px; padding:0.5rem 1rem; font-size:0.82rem; font-weight:700; cursor:pointer; }
+        .nd-tab.active { background:#1e40af; color:#fff; border-color:#1e40af; }
+
+        .nd-filter { display:grid; gap:0.9rem; grid-template-columns:repeat(3,minmax(0,1fr)); background:#fff; border:1px solid rgba(44,40,32,0.08); border-radius:18px; padding:1rem; margin-bottom:1.1rem; }
+        .nd-label { font-size:0.72rem; letter-spacing:0.08em; text-transform:uppercase; color:#8a837d; font-weight:700; margin-bottom:0.45rem; display:block; }
+        .nd-select { width:100%; height:44px; border-radius:12px; border:1.5px solid rgba(44,40,32,0.12); background:#faf8f4; padding:0 0.75rem; font-size:0.86rem; color:#2c2820; }
+        .nd-view-toggle { display:flex; gap:0.45rem; align-items:flex-end; }
+
+        .nd-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; }
+        .nd-card { background:#fff; border:1px solid rgba(44,40,32,0.08); border-radius:20px; overflow:hidden; box-shadow:0 1px 4px rgba(44,40,32,0.05); }
+        .nd-img { width:100%; height:160px; object-fit:cover; }
+        .nd-img-ph { width:100%; height:160px; background:linear-gradient(135deg,#dbeafe,#bfdbfe); display:flex; align-items:center; justify-content:center; font-size:2.4rem; }
+        .nd-body { padding:1rem 1.1rem; }
+        .nd-top { display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem; margin-bottom:0.7rem; }
+        .nd-h { font-family:'Fraunces',serif; color:#2c2820; font-size:1rem; font-weight:700; }
+        .nd-m { color:#6b6560; font-size:0.78rem; margin-top:4px; }
+        .nd-badge { display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:100px; font-size:0.68rem; font-weight:700; }
+        .nd-dot { width:6px; height:6px; border-radius:50%; }
+        .nd-tags { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:0.7rem; }
+        .nd-tag { border-radius:8px; padding:3px 8px; font-size:0.68rem; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+        .nd-items { color:#6b6560; font-size:0.78rem; line-height:1.5; margin-bottom:0.7rem; }
+        .nd-meta { border-radius:12px; background:#f6f4f0; padding:9px 10px; font-size:0.74rem; color:#6b6560; margin-bottom:0.75rem; }
+        .nd-claim { width:100%; border:none; border-radius:12px; padding:0.62rem 0.9rem; background:#1e40af; color:#fff; font-size:0.82rem; font-weight:700; cursor:pointer; }
+        .nd-claim:disabled { opacity:0.55; cursor:not-allowed; }
+
+        .nd-map { display:grid; gap:1rem; grid-template-columns:1.2fr 0.8fr; }
+        .nd-pane { background:#fff; border:1px solid rgba(44,40,32,0.08); border-radius:20px; padding:1rem; }
+        .nd-empty { background:#fff; border:1.5px dashed rgba(44,40,32,0.12); border-radius:20px; padding:3rem 1.5rem; text-align:center; color:#8a837d; font-size:0.86rem; }
+
+        @media (max-width:1024px) {
+          .nd { padding:1.5rem 1rem 5.5rem; }
+          .nd-stats { grid-template-columns:repeat(2,1fr); }
+          .nd-filter { grid-template-columns:1fr; }
+          .nd-map { grid-template-columns:1fr; }
+        }
+      `}</style>
+
+      <div className="nd">
+        <div className="nd-inner">
+          <div className="nd-head">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[color:var(--accent)]">NGO dashboard</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--foreground)] sm:text-4xl">
-                Browse and claim surplus food quickly
-              </h1>
+              <div className="nd-title">Good work,<br /><span>{ngoDisplayName}.</span></div>
+              <div className="nd-sub">Browse nearby surplus food, claim quickly, and coordinate pickups with volunteers.</div>
             </div>
-            <button
-              type="button"
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="rounded-full border border-[color:var(--border)] bg-white/70 px-5 py-3 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-white"
-            >
-              Logout
+            <button type="button" onClick={() => signOut({ callbackUrl: "/login" })} className="nd-out">
+              <LogOut size={15} /> Logout
             </button>
           </div>
 
+          <div className="nd-stats">
+            <div className="nd-stat">
+              <div className="nd-stat-lbl">Available Now</div>
+              <div className="nd-stat-val">{dashboardStats.available}</div>
+            </div>
+            <div className="nd-stat">
+              <div className="nd-stat-lbl">My Claims</div>
+              <div className="nd-stat-val">{dashboardStats.claimed}</div>
+            </div>
+            <div className="nd-stat">
+              <div className="nd-stat-lbl">Expiring in 3h</div>
+              <div className="nd-stat-val">{dashboardStats.expiringSoon}</div>
+            </div>
+          </div>
+
+          <div className="nd-banner">
+            <div>
+              <div className="nd-banner-t">Prediction Spotlight</div>
+              <div className="nd-banner-s">Use surplus forecasts to pre-plan distribution routes for your team.</div>
+            </div>
+            <Link href="/dashboard/ngo/predictions" className="nd-banner-btn">
+              <Sparkles size={12} /> View Forecast
+            </Link>
+          </div>
+
           {!ngoLocation ? (
-            <div className="mt-5 rounded-2xl border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
-              Please update your profile with your location to see distance from donors.
-              <Link href="/dashboard/ngo/profile" className="ml-2 font-semibold underline">
+            <div className="nd-alert warn">
+              Please update your profile location to see donor distance and smarter sorting.
+              <Link href="/dashboard/ngo/profile" style={{ marginLeft: 8, fontWeight: 700, textDecoration: "underline" }}>
                 Update profile
               </Link>
             </div>
           ) : null}
 
-          {(error || bannerMessage) && (
-            <div className={`mt-5 rounded-2xl px-4 py-3 text-sm ${error ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}>
-              {error || bannerMessage}
-            </div>
-          )}
+          {error ? <div className="nd-alert err">{error}</div> : null}
+          {!error && bannerMessage ? <div className="nd-alert ok">{bannerMessage}</div> : null}
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => setActiveTab("available")}
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
-                activeTab === "available" ? "bg-[color:var(--accent)] text-white" : "border border-[color:var(--border)] bg-white/70"
-              }`}
-            >
+          <div className="nd-tabs">
+            <button type="button" onClick={() => setActiveTab("available")} className={`nd-tab ${activeTab === "available" ? "active" : ""}`}>
               Available Listings
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("claims")}
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
-                activeTab === "claims" ? "bg-[color:var(--accent)] text-white" : "border border-[color:var(--border)] bg-white/70"
-              }`}
-            >
+            <button type="button" onClick={() => setActiveTab("claims")} className={`nd-tab ${activeTab === "claims" ? "active" : ""}`}>
               My Claims
             </button>
-            <button
-              type="button"
-              onClick={() => void loadListings()}
-              className="rounded-full border border-[color:var(--border)] bg-white/70 px-5 py-2 text-sm font-semibold transition hover:bg-white"
-            >
-              Refresh
+            <button type="button" onClick={() => void loadListings()} className="nd-tab">
+              <RefreshCw size={13} style={{ display: "inline", marginRight: 6 }} /> Refresh
             </button>
           </div>
 
           {activeTab === "available" ? (
             <>
-              <div className="mt-6 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAvailableView("card")}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                    availableView === "card"
-                      ? "bg-[color:var(--accent)] text-white"
-                      : "border border-[color:var(--border)] bg-white/70"
-                  }`}
-                >
-                  Card View
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAvailableView("map")}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                    availableView === "map"
-                      ? "bg-[color:var(--accent)] text-white"
-                      : "border border-[color:var(--border)] bg-white/70"
-                  }`}
-                >
-                  Map View
-                </button>
-              </div>
-
-              <div className="mt-6 grid gap-4 rounded-3xl border border-[color:var(--border)] bg-white/70 p-4 md:grid-cols-2 lg:grid-cols-3">
-                <label className="text-sm font-medium text-[color:var(--foreground)]">
-                  Filter by food type
-                  <select
-                    value={filterFoodType}
-                    onChange={(event) => setFilterFoodType(event.target.value as FoodTypeFilter)}
-                    className="mt-2 w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[color:var(--accent)]"
-                  >
+              <div className="nd-filter">
+                <label>
+                  <span className="nd-label">Filter Food Type</span>
+                  <select value={filterFoodType} onChange={(event) => setFilterFoodType(event.target.value as FoodTypeFilter)} className="nd-select">
                     <option value="all">All</option>
                     <option value="cooked">Cooked</option>
                     <option value="packaged">Packaged</option>
                     <option value="raw">Raw</option>
                   </select>
                 </label>
-                <label className="text-sm font-medium text-[color:var(--foreground)]">
-                  Sort by
-                  <select
-                    value={sortMode}
-                    onChange={(event) => setSortMode(event.target.value as SortMode)}
-                    className="mt-2 w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[color:var(--accent)]"
-                  >
+
+                <label>
+                  <span className="nd-label">Sort By</span>
+                  <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} className="nd-select">
                     <option value="newest">Newest</option>
                     <option value="nearest">Nearest First</option>
                     <option value="expiring">Expiring Soon</option>
                   </select>
                 </label>
+
+                <div className="nd-view-toggle">
+                  <button type="button" onClick={() => setAvailableView("card")} className={`nd-tab ${availableView === "card" ? "active" : ""}`}>Card View</button>
+                  <button type="button" onClick={() => setAvailableView("map")} className={`nd-tab ${availableView === "map" ? "active" : ""}`}>Map View</button>
+                </div>
               </div>
 
               {isLoading ? (
-                <div className="mt-6 rounded-3xl border border-dashed border-[color:var(--border)] bg-white/40 px-6 py-12 text-center text-sm text-[color:var(--muted)]">
-                  Loading available listings...
-                </div>
+                <div className="nd-empty">Loading available listings...</div>
               ) : availableView === "map" ? (
-                <div className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                <div className="nd-map">
                   <ListingsMap
                     listings={filteredAvailableListings}
                     userLocation={ngoLocation}
@@ -352,165 +410,146 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
                     }}
                   />
 
-                  <aside className="rounded-3xl border border-[color:var(--border)] bg-white/85 p-5 shadow-sm">
+                  <aside className="nd-pane">
                     {selectedMapListing ? (
-                      <div className="space-y-4">
-                        <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="nd-top" style={{ marginBottom: 10 }}>
                           <div>
-                            <h3 className="text-lg font-semibold text-[color:var(--foreground)]">{selectedMapListing.donorName}</h3>
-                            <p className="text-sm text-[color:var(--muted)]">{selectedMapListing.location.address}</p>
+                            <div className="nd-h">{selectedMapListing.donorName}</div>
+                            <div className="nd-m"><MapPin size={12} style={{ display: "inline", marginRight: 4 }} /> {selectedMapListing.location.address}</div>
                           </div>
-                          <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${statusClasses[selectedMapListing.status]}`}>
-                            {selectedMapListing.status.replace("_", " ")}
+                          <span className="nd-badge" style={{ background: statusMeta[selectedMapListing.status].bg, color: statusMeta[selectedMapListing.status].color }}>
+                            <span className="nd-dot" style={{ background: statusMeta[selectedMapListing.status].dot }} />
+                            {statusMeta[selectedMapListing.status].label}
                           </span>
                         </div>
-
-                        <ul className="space-y-1 text-sm text-[color:var(--muted)]">
+                        <div className="nd-items">
                           {selectedMapListing.foodItems.map((item, index) => (
-                            <li key={`${selectedMapListing._id}-map-item-${index}`}>
+                            <div key={`${selectedMapListing._id}-map-item-${index}`}>
                               {item.name}: {item.quantity} {item.unit}
-                            </li>
+                            </div>
                           ))}
-                        </ul>
-
-                        <p className="text-sm text-[color:var(--muted)]">Expiry: {formatDateTime(selectedMapListing.expiresAt)}</p>
-
+                        </div>
+                        <div className="nd-meta">Pickup deadline: {formatDateTime(selectedMapListing.expiresAt)}</div>
                         <button
                           type="button"
                           disabled={isClaimLoading[selectedMapListing._id] || selectedMapListing.status !== "available"}
                           onClick={() => void handleClaimListing(selectedMapListing._id)}
-                          className="w-full rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="nd-claim"
                         >
                           {isClaimLoading[selectedMapListing._id] ? "Claiming..." : selectedMapListing.status === "available" ? "Claim" : "View"}
                         </button>
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-[color:var(--border)] bg-white/50 px-4 py-10 text-center text-sm text-[color:var(--muted)]">
-                        Select a listing marker to see full details and claim.
-                      </div>
+                      <div className="nd-empty" style={{ padding: "2rem 1rem" }}>Select a listing marker to view details and claim.</div>
                     )}
                   </aside>
                 </div>
               ) : filteredAvailableListings.length ? (
-                <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {filteredAvailableListings.map((listing) => (
-                    <article key={listing._id} className="overflow-hidden rounded-3xl border border-[color:var(--border)] bg-white/85 shadow-sm">
-                      {listing.images[0] ? (
-                        <Image
-                          src={listing.images[0]}
-                          alt="Listing"
-                          width={640}
-                          height={320}
-                          className="h-44 w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-44 items-center justify-center bg-stone-100 text-sm text-[color:var(--muted)]">No image uploaded</div>
-                      )}
-                      <div className="space-y-4 p-5">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h3 className="text-lg font-semibold text-[color:var(--foreground)]">{listing.donorName}</h3>
-                            <p className="mt-1 text-sm text-[color:var(--muted)]">{listing.donorAddress}</p>
+                <div className="nd-grid">
+                  {filteredAvailableListings.map((listing) => {
+                    const status = statusMeta[listing.status];
+                    const food = foodMeta[listing.foodType];
+                    const expiring = getCountdownLabel(listing.expiresAt, now);
+                    return (
+                      <article key={listing._id} className="nd-card">
+                        {listing.images[0] ? (
+                          <Image src={listing.images[0]} alt="Listing" width={640} height={320} className="nd-img" unoptimized />
+                        ) : (
+                          <div className="nd-img-ph">🥘</div>
+                        )}
+                        <div className="nd-body">
+                          <div className="nd-top">
+                            <div>
+                              <div className="nd-h">{listing.donorName}</div>
+                              <div className="nd-m">{listing.donorAddress}</div>
+                            </div>
+                            <span className="nd-badge" style={{ background: status.bg, color: status.color }}>
+                              <span className="nd-dot" style={{ background: status.dot }} />
+                              {status.label}
+                            </span>
                           </div>
-                          <span className="rounded-full bg-[color:var(--surface-strong)] px-3 py-1 text-xs font-semibold uppercase text-[color:var(--accent)]">
-                            {listing.foodType}
-                          </span>
+
+                          <div className="nd-tags">
+                            <span className="nd-tag" style={{ background: food.bg, color: food.color }}>{food.label}</span>
+                            <span className="nd-tag" style={{ background: "#f3f0ea", color: "#6b6560" }}>{listing.totalQuantity}</span>
+                          </div>
+
+                          <div className="nd-items">
+                            {listing.foodItems.map((item, index) => (
+                              <div key={`${listing._id}-item-${index}`}>{item.name}: {item.quantity} {item.unit}</div>
+                            ))}
+                          </div>
+
+                          <div className="nd-meta">
+                            <div style={{ fontWeight: 700, color: "#2c2820", marginBottom: 3 }}>{expiring}</div>
+                            <div>Pickup deadline: {formatDateTime(listing.expiresAt)}</div>
+                            {listing.distanceKm !== undefined ? <div>Distance: {listing.distanceKm} km</div> : null}
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isClaimLoading[listing._id] || listing.status !== "available"}
+                            onClick={() => void handleClaimListing(listing._id)}
+                            className="nd-claim"
+                          >
+                            {isClaimLoading[listing._id] ? "Claiming..." : listing.status === "claimed" ? "Claimed" : "Claim"}
+                          </button>
                         </div>
-
-                        <ul className="space-y-1 text-sm text-[color:var(--muted)]">
-                          {listing.foodItems.map((item, index) => (
-                            <li key={`${listing._id}-item-${index}`}>
-                              {item.name}: {item.quantity} {item.unit}
-                            </li>
-                          ))}
-                        </ul>
-
-                        <div className="rounded-2xl bg-[color:var(--surface-strong)] p-3 text-sm text-[color:var(--foreground)]">
-                          <p className="font-medium">{getCountdownLabel(listing.expiresAt, now)}</p>
-                          <p className="mt-1 text-xs text-[color:var(--muted)]">Pickup deadline: {formatDateTime(listing.expiresAt)}</p>
-                          {listing.distanceKm !== undefined ? (
-                            <p className="mt-1 text-xs text-[color:var(--muted)]">
-                              Distance: {listing.distanceKm} km
-                            </p>
-                          ) : ngoLocation ? (
-                            <p className="mt-1 text-xs text-[color:var(--muted)]">
-                              Location data unavailable
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={isClaimLoading[listing._id] || listing.status !== "available"}
-                          onClick={() => void handleClaimListing(listing._id)}
-                          className="w-full rounded-full bg-[color:var(--accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isClaimLoading[listing._id]
-                            ? "Claiming..."
-                            : listing.status === "claimed"
-                              ? "Claimed ✓"
-                              : "Claim"}
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="mt-6 rounded-3xl border border-dashed border-[color:var(--border)] bg-white/40 px-6 py-12 text-center text-sm text-[color:var(--muted)]">
-                  No available listings match your filters.
-                </div>
+                <div className="nd-empty">No available listings match your filters.</div>
               )}
             </>
           ) : (
             <>
               {isLoading ? (
-                <div className="mt-6 rounded-3xl border border-dashed border-[color:var(--border)] bg-white/40 px-6 py-12 text-center text-sm text-[color:var(--muted)]">
-                  Loading your claimed listings...
-                </div>
+                <div className="nd-empty">Loading your claimed listings...</div>
               ) : claimedListings.length ? (
-                <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {claimedListings.map((listing) => (
-                    <article key={listing._id} className="rounded-3xl border border-[color:var(--border)] bg-white/85 p-5 shadow-sm">
-                      <div className="flex items-start justify-between gap-3">
-                        <h3 className="text-lg font-semibold text-[color:var(--foreground)]">
-                          {listing.foodItems.map((item) => item.name).join(", ")}
-                        </h3>
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${statusClasses[listing.status]}`}>
-                          {listing.status.replace("_", " ")}
-                        </span>
-                      </div>
+                <div className="nd-grid">
+                  {claimedListings.map((listing) => {
+                    const status = statusMeta[listing.status];
+                    return (
+                      <article key={listing._id} className="nd-card" style={{ overflow: "visible" }}>
+                        <div className="nd-body">
+                          <div className="nd-top">
+                            <div className="nd-h">{listing.foodItems.map((item) => item.name).join(", ")}</div>
+                            <span className="nd-badge" style={{ background: status.bg, color: status.color }}>
+                              <span className="nd-dot" style={{ background: status.dot }} />
+                              {status.label}
+                            </span>
+                          </div>
 
-                      <div className="mt-4 space-y-3 text-sm text-[color:var(--muted)]">
-                        <div>
-                          <p className="font-medium text-[color:var(--foreground)]">Donor Contact</p>
-                          <p>{listing.donorId?.name ?? listing.donorName}</p>
-                          <p>{listing.donorId?.phone ?? listing.donorPhone}</p>
+                          <div className="nd-meta" style={{ marginBottom: 10 }}>
+                            <div style={{ fontWeight: 700, color: "#2c2820" }}>Donor Contact</div>
+                            <div>{listing.donorId?.name ?? listing.donorName}</div>
+                            <div>{listing.donorId?.phone ?? listing.donorPhone}</div>
+                          </div>
+
+                          <div className="nd-meta" style={{ marginBottom: 10 }}>
+                            <div style={{ fontWeight: 700, color: "#2c2820" }}>Volunteer Assigned</div>
+                            <div>{listing.assignedVolunteer ? `${listing.assignedVolunteer.name} (${listing.assignedVolunteer.phone})` : "Not assigned yet"}</div>
+                          </div>
+
+                          <div className="nd-meta" style={{ marginBottom: 0 }}>
+                            <div style={{ fontWeight: 700, color: "#2c2820" }}>Pickup Deadline</div>
+                            <div>{formatDateTime(listing.expiresAt)}</div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-[color:var(--foreground)]">Volunteer Assigned</p>
-                          <p>
-                            {listing.assignedVolunteer
-                              ? `${listing.assignedVolunteer.name} (${listing.assignedVolunteer.phone})`
-                              : "Not assigned yet"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="font-medium text-[color:var(--foreground)]">Pickup deadline</p>
-                          <p>{formatDateTime(listing.expiresAt)}</p>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="mt-6 rounded-3xl border border-dashed border-[color:var(--border)] bg-white/40 px-6 py-12 text-center text-sm text-[color:var(--muted)]">
-                  You have not claimed any listings yet.
-                </div>
+                <div className="nd-empty">You have not claimed any listings yet.</div>
               )}
             </>
           )}
-        </section>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

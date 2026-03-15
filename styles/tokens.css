@@ -1,0 +1,17 @@
+:root {
+  --brand-green: #16a34a;
+  --brand-green-light: #dcfce7;
+  --brand-orange: #ea580c;
+  --brand-orange-light: #fff7ed;
+  --brand-blue: #2563eb;
+  --brand-blue-light: #eff6ff;
+  --surface: #f8fafc;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --radius: 16px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.13);
+}

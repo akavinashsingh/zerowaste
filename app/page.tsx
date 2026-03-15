@@ -13,6 +13,12 @@ interface PublicStats {
   citiesCovered: number;
 }
 
+const CURRENT_YEAR = 2026;
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
 async function getStats(): Promise<PublicStats> {
   try {
     const base = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
@@ -329,12 +335,12 @@ export default async function Home() {
           <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
             {[
               {
-                value: stats.mealsSaved.toLocaleString() + "+",
+                value: formatNumber(stats.mealsSaved) + "+",
                 label: "Meals Saved",
                 icon: "🍱",
               },
               {
-                value: stats.foodWastePrevented.toLocaleString() + " kg",
+                value: formatNumber(stats.foodWastePrevented) + " kg",
                 label: "Food Waste Prevented",
                 icon: "♻️",
               },
@@ -514,7 +520,7 @@ export default async function Home() {
           </div>
 
           <div className="mt-8 border-t border-slate-100 pt-6 text-center text-xs text-slate-400">
-            Built for good 🌱 · © {new Date().getFullYear()} FeedForward. All
+            Built for good 🌱 · © {CURRENT_YEAR} FeedForward. All
             rights reserved.
           </div>
         </div>

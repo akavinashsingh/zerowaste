@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import connectDB from "@/lib/mongodb";
+import { connectMongo } from "@/lib/mongodb";
 import FoodListing from "@/models/FoodListing";
 import User from "@/models/User";
 
 export async function GET() {
   try {
-    await connectDB();
+    await connectMongo();
 
     const [delivered, donors, ngos, volunteers] = await Promise.all([
       FoodListing.countDocuments({ status: "delivered" }),

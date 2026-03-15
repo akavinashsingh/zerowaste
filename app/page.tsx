@@ -1,8 +1,7 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
-import HeroStats from "@/components/landing/HeroStats";
 
 interface PublicStats {
   mealsSaved: number;
@@ -46,485 +45,1167 @@ export default async function Home() {
   const stats = await getStats();
 
   return (
-    <div className="min-h-screen bg-white font-sans">
-      {/* ── NAVBAR ──────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 border-b border-slate-100 bg-white/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3 sm:px-8">
-          <Link
-            href="/"
-            className="flex items-center gap-2 font-display text-xl font-bold text-slate-900"
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-600 text-lg">
-              🌿
-            </span>
-            FeedForward
-          </Link>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;0,9..144,800;0,9..144,900;1,9..144,300;1,9..144,800&family=DM+Sans:wght@300;400;500;600&display=swap');
 
-          <div className="hidden items-center gap-7 text-sm font-medium text-slate-600 sm:flex">
-            <a href="#how-it-works" className="transition hover:text-green-700">
-              How It Works
-            </a>
-            <a href="#impact" className="transition hover:text-green-700">
-              Impact
-            </a>
-            <a href="#join" className="transition hover:text-green-700">
-              Join Us
-            </a>
-          </div>
+        * { box-sizing: border-box; }
 
-          <div className="flex items-center gap-2.5">
-            <Link
-              href="/login"
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-            >
-              Login
+        :root {
+          --ff-leaf: #1a5c38;
+          --ff-leaf-mid: #2d7a50;
+          --ff-leaf-light: #e8f5ee;
+          --ff-amber: #c8601a;
+          --ff-amber-light: #fef3eb;
+          --ff-cream: #faf8f4;
+          --ff-stone: #2c2820;
+          --ff-stone-mid: #6b6560;
+          --ff-stone-light: #f0ede8;
+          --ff-white: #ffffff;
+          --ff-border: rgba(44,40,32,0.10);
+        }
+
+        .ff-page {
+          font-family: 'DM Sans', sans-serif;
+          background: var(--ff-cream);
+          color: var(--ff-stone);
+          min-height: 100vh;
+        }
+
+        .font-display { font-family: 'Fraunces', Georgia, serif; }
+
+        .ff-nav {
+          position: sticky;
+          top: 0;
+          z-index: 100;
+          background: rgba(250,248,244,0.88);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-bottom: 1px solid var(--ff-border);
+        }
+        .ff-nav-inner {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 0 2rem;
+          height: 68px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .ff-logo {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          text-decoration: none;
+          font-family: 'Fraunces', serif;
+          font-weight: 800;
+          font-size: 1.3rem;
+          color: var(--ff-stone);
+          letter-spacing: -0.02em;
+        }
+        .ff-logo-mark {
+          width: 36px; height: 36px;
+          background: var(--ff-leaf);
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.1rem;
+          box-shadow: 0 2px 8px rgba(26,92,56,0.25);
+        }
+        .ff-nav-links {
+          display: flex;
+          align-items: center;
+          gap: 2rem;
+          list-style: none;
+          margin: 0; padding: 0;
+        }
+        .ff-nav-links a {
+          text-decoration: none;
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: var(--ff-stone-mid);
+          letter-spacing: 0.01em;
+          transition: color 0.2s;
+        }
+        .ff-nav-links a:hover { color: var(--ff-leaf); }
+        .ff-nav-actions { display: flex; align-items: center; gap: 0.75rem; }
+        .btn-ghost {
+          padding: 0.5rem 1.1rem;
+          border-radius: 10px;
+          border: 1.5px solid var(--ff-border);
+          background: transparent;
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: var(--ff-stone);
+          text-decoration: none;
+          transition: all 0.2s;
+          font-family: 'DM Sans', sans-serif;
+        }
+        .btn-ghost:hover { border-color: var(--ff-leaf); color: var(--ff-leaf); background: var(--ff-leaf-light); }
+        .btn-primary {
+          padding: 0.55rem 1.2rem;
+          border-radius: 10px;
+          background: var(--ff-leaf);
+          border: none;
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: white;
+          text-decoration: none;
+          transition: all 0.2s;
+          box-shadow: 0 2px 8px rgba(26,92,56,0.28);
+          font-family: 'DM Sans', sans-serif;
+        }
+        .btn-primary:hover { background: var(--ff-leaf-mid); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(26,92,56,0.32); }
+        .btn-primary:active { transform: translateY(0); }
+
+        .ff-hero {
+          position: relative;
+          overflow: hidden;
+          padding: 7rem 2rem 6rem;
+          background: var(--ff-cream);
+        }
+        .ff-hero::before {
+          content: '';
+          position: absolute;
+          top: -120px; right: -120px;
+          width: 600px; height: 600px;
+          background: radial-gradient(circle, rgba(26,92,56,0.07) 0%, transparent 70%);
+          pointer-events: none;
+        }
+        .ff-hero::after {
+          content: '';
+          position: absolute;
+          bottom: -80px; left: -80px;
+          width: 400px; height: 400px;
+          background: radial-gradient(circle, rgba(200,96,26,0.06) 0%, transparent 70%);
+          pointer-events: none;
+        }
+        .ff-hero-inner {
+          max-width: 1200px;
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 5rem;
+          align-items: center;
+          position: relative;
+          z-index: 1;
+        }
+        .ff-eyebrow {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 14px 6px 10px;
+          background: var(--ff-leaf-light);
+          border: 1px solid rgba(26,92,56,0.18);
+          border-radius: 100px;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: var(--ff-leaf);
+          letter-spacing: 0.02em;
+          margin-bottom: 1.5rem;
+        }
+        .ff-eyebrow-dot {
+          width: 7px; height: 7px;
+          border-radius: 50%;
+          background: var(--ff-leaf);
+          animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.8); }
+        }
+        .ff-hero-h1 {
+          font-family: 'Fraunces', serif;
+          font-size: clamp(3rem, 5.5vw, 5.2rem);
+          font-weight: 900;
+          line-height: 1.02;
+          letter-spacing: -0.03em;
+          color: var(--ff-stone);
+          margin: 0 0 1.5rem;
+        }
+        .ff-hero-h1 em {
+          font-style: italic;
+          color: var(--ff-leaf);
+          position: relative;
+        }
+        .ff-hero-h1 em::after {
+          content: '';
+          position: absolute;
+          bottom: 4px; left: 0; right: 0;
+          height: 3px;
+          background: var(--ff-leaf);
+          border-radius: 4px;
+          opacity: 0.3;
+        }
+        .ff-hero-sub {
+          font-size: 1.125rem;
+          line-height: 1.7;
+          color: var(--ff-stone-mid);
+          max-width: 460px;
+          margin: 0 0 2.5rem;
+          font-weight: 300;
+        }
+        .ff-cta-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.875rem;
+          margin-bottom: 3rem;
+        }
+        .btn-hero-primary {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0.875rem 1.75rem;
+          background: var(--ff-leaf);
+          color: white;
+          border-radius: 14px;
+          font-size: 0.975rem;
+          font-weight: 600;
+          text-decoration: none;
+          transition: all 0.2s;
+          box-shadow: 0 4px 16px rgba(26,92,56,0.30);
+          font-family: 'DM Sans', sans-serif;
+        }
+        .btn-hero-primary:hover { background: var(--ff-leaf-mid); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26,92,56,0.35); }
+        .btn-hero-secondary {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0.875rem 1.75rem;
+          background: var(--ff-amber-light);
+          color: var(--ff-amber);
+          border-radius: 14px;
+          font-size: 0.975rem;
+          font-weight: 600;
+          text-decoration: none;
+          transition: all 0.2s;
+          border: 1.5px solid rgba(200,96,26,0.2);
+          font-family: 'DM Sans', sans-serif;
+        }
+        .btn-hero-secondary:hover { background: #fde8d8; transform: translateY(-2px); }
+
+        .ff-mini-stats {
+          display: flex;
+          gap: 2rem;
+          padding-top: 2rem;
+          border-top: 1px solid var(--ff-border);
+        }
+        .ff-mini-stat-value {
+          font-family: 'Fraunces', serif;
+          font-size: 1.6rem;
+          font-weight: 800;
+          color: var(--ff-stone);
+          letter-spacing: -0.03em;
+          line-height: 1;
+        }
+        .ff-mini-stat-label {
+          font-size: 0.75rem;
+          color: var(--ff-stone-mid);
+          margin-top: 3px;
+          font-weight: 400;
+        }
+
+        .ff-hero-visual {
+          position: relative;
+          height: 520px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .ff-hero-bg-circle {
+          position: absolute;
+          width: 380px; height: 380px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #e8f5ee 0%, #d4edde 50%, #f0f8f4 100%);
+          border: 1px solid rgba(26,92,56,0.10);
+        }
+
+        .ff-card-float {
+          position: absolute;
+          background: white;
+          border-radius: 18px;
+          padding: 1rem 1.2rem;
+          box-shadow: 0 8px 32px rgba(44,40,32,0.12), 0 2px 8px rgba(44,40,32,0.06);
+          border: 1px solid rgba(44,40,32,0.07);
+          animation: float-y 4s ease-in-out infinite;
+        }
+        .ff-card-float:nth-child(2) { animation-delay: -1.5s; animation-duration: 5s; }
+        .ff-card-float:nth-child(3) { animation-delay: -3s; animation-duration: 4.5s; }
+        .ff-card-float:nth-child(4) { animation-delay: -0.8s; animation-duration: 3.8s; }
+        @keyframes float-y {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-10px); }
+        }
+
+        .ff-card-listing {
+          top: 20px; left: -20px;
+          width: 220px;
+        }
+        .ff-card-listing-tag {
+          display: inline-block;
+          padding: 2px 8px;
+          background: var(--ff-leaf-light);
+          color: var(--ff-leaf);
+          border-radius: 6px;
+          font-size: 0.7rem;
+          font-weight: 600;
+          margin-bottom: 8px;
+        }
+        .ff-card-listing-title {
+          font-family: 'Fraunces', serif;
+          font-size: 0.95rem;
+          font-weight: 700;
+          color: var(--ff-stone);
+          margin-bottom: 4px;
+        }
+        .ff-card-listing-sub { font-size: 0.72rem; color: var(--ff-stone-mid); margin-bottom: 10px; }
+        .ff-card-listing-footer {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.72rem;
+          color: var(--ff-stone-mid);
+          padding-top: 8px;
+          border-top: 1px solid var(--ff-border);
+        }
+        .ff-avatar-xs {
+          width: 20px; height: 20px;
+          border-radius: 50%;
+          background: var(--ff-amber-light);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 0.65rem;
+        }
+
+        .ff-card-volunteer {
+          bottom: 60px; right: -20px;
+          width: 200px;
+        }
+        .ff-card-vol-top {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 8px;
+        }
+        .ff-vol-avatar {
+          width: 38px; height: 38px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #c8e6d8, #a8d5be);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.1rem;
+          flex-shrink: 0;
+        }
+        .ff-vol-name { font-size: 0.85rem; font-weight: 600; color: var(--ff-stone); }
+        .ff-vol-role { font-size: 0.7rem; color: var(--ff-stone-mid); }
+        .ff-vol-status {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 10px;
+          background: var(--ff-leaf-light);
+          border-radius: 8px;
+          font-size: 0.72rem;
+          font-weight: 600;
+          color: var(--ff-leaf);
+        }
+
+        .ff-card-stat {
+          top: 120px; right: -30px;
+          text-align: center;
+          padding: 0.875rem 1.1rem;
+        }
+        .ff-card-stat-num {
+          font-family: 'Fraunces', serif;
+          font-size: 1.8rem;
+          font-weight: 900;
+          color: var(--ff-leaf);
+          letter-spacing: -0.04em;
+          line-height: 1;
+        }
+        .ff-card-stat-label { font-size: 0.7rem; color: var(--ff-stone-mid); margin-top: 2px; }
+
+        .ff-card-match {
+          bottom: 180px; left: -30px;
+          padding: 0.75rem 1rem;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .ff-match-icon {
+          width: 34px; height: 34px;
+          background: linear-gradient(135deg, var(--ff-leaf), var(--ff-leaf-mid));
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1rem;
+          flex-shrink: 0;
+        }
+        .ff-match-text { font-size: 0.78rem; font-weight: 600; color: var(--ff-stone); line-height: 1.3; }
+        .ff-match-sub { font-size: 0.68rem; color: var(--ff-stone-mid); }
+
+        .ff-trust {
+          background: white;
+          border-top: 1px solid var(--ff-border);
+          border-bottom: 1px solid var(--ff-border);
+          padding: 3.5rem 2rem;
+        }
+        .ff-trust-inner { max-width: 1200px; margin: 0 auto; }
+        .ff-trust-label {
+          text-align: center;
+          font-size: 0.78rem;
+          font-weight: 600;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--ff-stone-mid);
+          margin-bottom: 2rem;
+        }
+        .ff-trust-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1.5rem;
+        }
+        .ff-trust-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 1rem;
+          padding: 1.5rem;
+          border-radius: 16px;
+          background: var(--ff-cream);
+          border: 1px solid var(--ff-border);
+          transition: all 0.25s;
+        }
+        .ff-trust-item:hover { background: var(--ff-leaf-light); border-color: rgba(26,92,56,0.15); transform: translateY(-2px); }
+        .ff-trust-icon-wrap {
+          width: 42px; height: 42px;
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.2rem;
+          flex-shrink: 0;
+        }
+        .ff-trust-title {
+          font-family: 'Fraunces', serif;
+          font-size: 1rem;
+          font-weight: 700;
+          color: var(--ff-stone);
+          margin-bottom: 4px;
+        }
+        .ff-trust-desc { font-size: 0.82rem; color: var(--ff-stone-mid); line-height: 1.55; font-weight: 300; }
+
+        .ff-section {
+          padding: 6rem 2rem;
+        }
+        .ff-section-inner { max-width: 1200px; margin: 0 auto; }
+        .ff-section-head { text-align: center; margin-bottom: 4rem; }
+        .ff-section-tag {
+          display: inline-block;
+          padding: 5px 14px;
+          border-radius: 100px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          margin-bottom: 1rem;
+        }
+        .ff-section-h2 {
+          font-family: 'Fraunces', serif;
+          font-size: clamp(2rem, 3.5vw, 3rem);
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          color: var(--ff-stone);
+          line-height: 1.1;
+          margin: 0;
+        }
+        .ff-section-sub {
+          margin-top: 0.75rem;
+          font-size: 1rem;
+          color: var(--ff-stone-mid);
+          font-weight: 300;
+        }
+
+        .ff-steps { background: white; }
+        .ff-steps-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1px;
+          background: var(--ff-border);
+          border-radius: 20px;
+          overflow: hidden;
+          border: 1px solid var(--ff-border);
+        }
+        .ff-step-card {
+          background: white;
+          padding: 2.5rem 2rem;
+          transition: background 0.25s;
+          position: relative;
+        }
+        .ff-step-card:hover { background: var(--ff-cream); }
+        .ff-step-num {
+          font-family: 'Fraunces', serif;
+          font-size: 5rem;
+          font-weight: 900;
+          line-height: 1;
+          color: transparent;
+          -webkit-text-stroke: 1.5px var(--ff-border);
+          letter-spacing: -0.05em;
+          margin-bottom: 1rem;
+        }
+        .ff-step-emoji {
+          font-size: 2rem;
+          margin-bottom: 1rem;
+          display: block;
+        }
+        .ff-step-title {
+          font-family: 'Fraunces', serif;
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: var(--ff-stone);
+          margin-bottom: 0.75rem;
+        }
+        .ff-step-desc { font-size: 0.875rem; color: var(--ff-stone-mid); line-height: 1.65; font-weight: 300; }
+
+        .ff-impact {
+          background: var(--ff-stone);
+          color: white;
+          position: relative;
+          overflow: hidden;
+        }
+        .ff-impact::before {
+          content: '';
+          position: absolute;
+          top: -200px; right: -200px;
+          width: 700px; height: 700px;
+          background: radial-gradient(circle, rgba(26,92,56,0.4) 0%, transparent 60%);
+          pointer-events: none;
+        }
+        .ff-impact-tag { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+        .ff-impact h2 { color: white; }
+        .ff-impact-sub { color: rgba(255,255,255,0.55) !important; }
+        .ff-impact-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 1.5rem;
+          position: relative;
+          z-index: 1;
+        }
+        .ff-impact-card {
+          padding: 2rem 1.5rem;
+          border-radius: 18px;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.10);
+          text-align: center;
+          transition: all 0.25s;
+        }
+        .ff-impact-card:hover {
+          background: rgba(255,255,255,0.10);
+          transform: translateY(-3px);
+        }
+        .ff-impact-icon { font-size: 2rem; margin-bottom: 1rem; }
+        .ff-impact-num {
+          font-family: 'Fraunces', serif;
+          font-size: 2.4rem;
+          font-weight: 900;
+          letter-spacing: -0.04em;
+          color: white;
+          line-height: 1;
+        }
+        .ff-impact-label { font-size: 0.8rem; color: rgba(255,255,255,0.55); margin-top: 6px; font-weight: 400; }
+
+        .ff-roles { background: var(--ff-cream); }
+        .ff-roles-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1.5rem;
+        }
+        .ff-role-card {
+          background: white;
+          border-radius: 24px;
+          border: 1px solid var(--ff-border);
+          overflow: hidden;
+          transition: all 0.25s;
+          display: flex;
+          flex-direction: column;
+        }
+        .ff-role-card:hover { transform: translateY(-4px); box-shadow: 0 16px 48px rgba(44,40,32,0.12); }
+        .ff-role-card-top {
+          padding: 2rem;
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+        }
+        .ff-role-icon {
+          width: 56px; height: 56px;
+          border-radius: 16px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.75rem;
+        }
+        .ff-role-card-label {
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          padding: 4px 10px;
+          border-radius: 6px;
+        }
+        .ff-role-card-body { padding: 0 2rem 2rem; flex: 1; display: flex; flex-direction: column; }
+        .ff-role-title {
+          font-family: 'Fraunces', serif;
+          font-size: 1.5rem;
+          font-weight: 800;
+          color: var(--ff-stone);
+          margin-bottom: 1rem;
+          letter-spacing: -0.02em;
+        }
+        .ff-role-points { list-style: none; padding: 0; margin: 0 0 1.75rem; flex: 1; }
+        .ff-role-points li {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          font-size: 0.865rem;
+          color: var(--ff-stone-mid);
+          padding: 0.5rem 0;
+          border-bottom: 1px solid var(--ff-border);
+          line-height: 1.45;
+          font-weight: 300;
+        }
+        .ff-role-points li:last-child { border-bottom: none; }
+        .ff-role-check { font-size: 0.85rem; flex-shrink: 0; margin-top: 1px; }
+        .ff-role-btn {
+          display: block;
+          width: 100%;
+          padding: 0.875rem;
+          border-radius: 14px;
+          text-align: center;
+          font-size: 0.9rem;
+          font-weight: 600;
+          text-decoration: none;
+          transition: all 0.2s;
+          font-family: 'DM Sans', sans-serif;
+        }
+        .ff-role-btn:active { transform: scale(0.98); }
+
+        .role-green .ff-role-card-top { background: linear-gradient(135deg, #e8f5ee, #d0eddd); }
+        .role-green .ff-role-icon { background: #c0e6cd; }
+        .role-green .ff-role-card-label { background: #d0eddd; color: var(--ff-leaf); }
+        .role-green .ff-role-check { color: var(--ff-leaf); }
+        .role-green .ff-role-btn { background: var(--ff-leaf); color: white; box-shadow: 0 4px 14px rgba(26,92,56,0.25); }
+        .role-green .ff-role-btn:hover { background: var(--ff-leaf-mid); box-shadow: 0 6px 20px rgba(26,92,56,0.30); }
+
+        .role-blue .ff-role-card-top { background: linear-gradient(135deg, #eff6ff, #dbeafe); }
+        .role-blue .ff-role-icon { background: #bfdbfe; }
+        .role-blue .ff-role-card-label { background: #dbeafe; color: #1d4ed8; }
+        .role-blue .ff-role-check { color: #2563eb; }
+        .role-blue .ff-role-btn { background: #2563eb; color: white; box-shadow: 0 4px 14px rgba(37,99,235,0.25); }
+        .role-blue .ff-role-btn:hover { background: #1d4ed8; }
+
+        .role-amber .ff-role-card-top { background: linear-gradient(135deg, #fff7ed, #fed7aa); }
+        .role-amber .ff-role-icon { background: #fcd9b0; }
+        .role-amber .ff-role-card-label { background: #fed7aa; color: var(--ff-amber); }
+        .role-amber .ff-role-check { color: var(--ff-amber); }
+        .role-amber .ff-role-btn { background: var(--ff-amber); color: white; box-shadow: 0 4px 14px rgba(200,96,26,0.25); }
+        .role-amber .ff-role-btn:hover { background: #b55518; }
+
+        .ff-testimonials { background: white; }
+        .ff-testimonials-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1.5rem;
+        }
+        .ff-testimonial {
+          padding: 2rem;
+          border-radius: 20px;
+          background: var(--ff-cream);
+          border: 1px solid var(--ff-border);
+          transition: all 0.2s;
+        }
+        .ff-testimonial:hover { border-color: rgba(26,92,56,0.2); transform: translateY(-2px); }
+        .ff-testimonial-stars { font-size: 0.85rem; color: #f59e0b; margin-bottom: 1rem; letter-spacing: 2px; }
+        .ff-testimonial-quote {
+          font-family: 'Fraunces', serif;
+          font-size: 1.05rem;
+          font-style: italic;
+          font-weight: 300;
+          color: var(--ff-stone);
+          line-height: 1.65;
+          margin-bottom: 1.5rem;
+        }
+        .ff-testimonial-footer {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding-top: 1.25rem;
+          border-top: 1px solid var(--ff-border);
+        }
+        .ff-testimonial-avatar {
+          width: 38px; height: 38px;
+          border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1rem;
+          font-weight: 700;
+          flex-shrink: 0;
+          font-family: 'Fraunces', serif;
+        }
+        .ff-testimonial-name { font-size: 0.875rem; font-weight: 600; color: var(--ff-stone); }
+        .ff-testimonial-role { font-size: 0.75rem; color: var(--ff-stone-mid); }
+
+        .ff-cta-banner {
+          margin: 0 2rem;
+          border-radius: 28px;
+          overflow: hidden;
+          background: var(--ff-leaf);
+          background-image:
+            radial-gradient(ellipse at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 50%),
+            radial-gradient(ellipse at 20% 80%, rgba(0,0,0,0.1) 0%, transparent 50%);
+          padding: 5rem 3rem;
+          text-align: center;
+          position: relative;
+          margin-bottom: 6rem;
+        }
+        .ff-cta-banner::before {
+          content: '🌿';
+          position: absolute;
+          font-size: 8rem;
+          top: -1rem; right: 3rem;
+          opacity: 0.08;
+          transform: rotate(-15deg);
+          pointer-events: none;
+        }
+        .ff-cta-banner h2 {
+          font-family: 'Fraunces', serif;
+          font-size: clamp(2rem, 4vw, 3.2rem);
+          font-weight: 900;
+          color: white;
+          letter-spacing: -0.03em;
+          margin-bottom: 1rem;
+        }
+        .ff-cta-banner p {
+          font-size: 1.1rem;
+          color: rgba(255,255,255,0.75);
+          margin-bottom: 2.5rem;
+          font-weight: 300;
+          max-width: 500px;
+          margin-left: auto; margin-right: auto;
+        }
+        .ff-cta-row {
+          display: flex;
+          justify-content: center;
+          gap: 1rem;
+          flex-wrap: wrap;
+        }
+        .btn-cta-white {
+          display: inline-block;
+          padding: 0.9rem 2rem;
+          background: white;
+          color: var(--ff-leaf);
+          border-radius: 14px;
+          font-size: 0.975rem;
+          font-weight: 700;
+          text-decoration: none;
+          transition: all 0.2s;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+          font-family: 'DM Sans', sans-serif;
+        }
+        .btn-cta-white:hover { background: #f0fdf4; transform: translateY(-2px); }
+        .btn-cta-outline {
+          display: inline-block;
+          padding: 0.9rem 2rem;
+          border: 2px solid rgba(255,255,255,0.4);
+          color: white;
+          border-radius: 14px;
+          font-size: 0.975rem;
+          font-weight: 600;
+          text-decoration: none;
+          transition: all 0.2s;
+          font-family: 'DM Sans', sans-serif;
+        }
+        .btn-cta-outline:hover { border-color: white; background: rgba(255,255,255,0.1); }
+
+        .ff-footer {
+          background: var(--ff-stone);
+          color: rgba(255,255,255,0.65);
+          padding: 3rem 2rem;
+        }
+        .ff-footer-inner {
+          max-width: 1200px;
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 1.5rem;
+        }
+        .ff-footer-logo { color: white; }
+        .ff-footer-logo .ff-logo-mark { background: rgba(255,255,255,0.15); }
+        .ff-footer-links {
+          display: flex;
+          gap: 1.5rem;
+          list-style: none;
+          padding: 0; margin: 0;
+        }
+        .ff-footer-links a {
+          text-decoration: none;
+          font-size: 0.85rem;
+          color: rgba(255,255,255,0.5);
+          transition: color 0.2s;
+        }
+        .ff-footer-links a:hover { color: white; }
+        .ff-footer-copy {
+          width: 100%;
+          padding-top: 1.5rem;
+          border-top: 1px solid rgba(255,255,255,0.08);
+          text-align: center;
+          font-size: 0.78rem;
+          color: rgba(255,255,255,0.3);
+        }
+
+        @media (max-width: 900px) {
+          .ff-hero-inner { grid-template-columns: 1fr; gap: 3rem; }
+          .ff-hero-visual { height: 320px; }
+          .ff-hero-bg-circle { width: 260px; height: 260px; }
+          .ff-trust-grid { grid-template-columns: 1fr; }
+          .ff-steps-grid { grid-template-columns: 1fr; }
+          .ff-impact-grid { grid-template-columns: repeat(2, 1fr); }
+          .ff-roles-grid { grid-template-columns: 1fr; }
+          .ff-testimonials-grid { grid-template-columns: 1fr; }
+          .ff-nav-links { display: none; }
+          .ff-card-listing { left: 0; top: 10px; width: 180px; }
+          .ff-card-volunteer { right: 0; width: 170px; }
+          .ff-card-stat { right: 0; top: 80px; }
+          .ff-card-match { left: 0; bottom: 120px; }
+          .ff-cta-banner { margin: 0 1rem; padding: 3rem 1.5rem; border-radius: 20px; }
+        }
+        @media (max-width: 600px) {
+          .ff-hero { padding: 4rem 1.25rem 4rem; }
+          .ff-section { padding: 4rem 1.25rem; }
+          .ff-mini-stats { gap: 1.5rem; }
+          .ff-impact-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        }
+      `}</style>
+
+      <div className="ff-page">
+        <nav className="ff-nav">
+          <div className="ff-nav-inner">
+            <Link href="/" className="ff-logo">
+              <div className="ff-logo-mark">🌿</div>
+              FeedForward
             </Link>
-            <Link
-              href="/register"
-              className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 active:scale-95"
-            >
-              Get Started
-            </Link>
+            <ul className="ff-nav-links">
+              <li><a href="#how-it-works">How It Works</a></li>
+              <li><a href="#impact">Impact</a></li>
+              <li><a href="#join">Join Us</a></li>
+            </ul>
+            <div className="ff-nav-actions">
+              <Link href="/login" className="btn-ghost">Login</Link>
+              <Link href="/register" className="btn-primary">Get Started →</Link>
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
 
-      {/* ── HERO SECTION ─────────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-green-50 via-white to-orange-50 px-5 pb-24 pt-16 sm:px-8">
-        {/* background blobs */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-40 -top-40 h-96 w-96 rounded-full bg-green-100/60 blur-3xl"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-20 -left-20 h-72 w-72 rounded-full bg-orange-100/50 blur-3xl"
-        />
-
-        <div className="relative mx-auto max-w-7xl">
-          <div className="grid items-center gap-12 lg:grid-cols-2">
-            {/* Left */}
-            <div className="flex flex-col items-start gap-6">
-              <span className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-4 py-1.5 text-sm font-medium text-green-700">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+        <section className="ff-hero">
+          <div className="ff-hero-inner">
+            <div>
+              <div className="ff-eyebrow">
+                <span className="ff-eyebrow-dot" />
                 Fighting Food Waste Since 2024
-              </span>
+              </div>
 
-              <h1 className="font-display text-5xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-6xl lg:text-7xl">
-                Turn Surplus{" "}
-                <span className="relative inline-block text-green-600">
-                  Into Support
-                  <svg
-                    className="absolute -bottom-2 left-0 w-full"
-                    viewBox="0 0 300 12"
-                    fill="none"
-                    preserveAspectRatio="none"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M0 8 Q75 2 150 8 Q225 14 300 8"
-                      stroke="#16a34a"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      fill="none"
-                      opacity="0.4"
-                    />
-                  </svg>
-                </span>
+              <h1 className="ff-hero-h1 font-display">
+                Turn Surplus<br />
+                Into <em>Support</em>
               </h1>
 
-              <p className="max-w-lg text-lg leading-relaxed text-slate-500">
+              <p className="ff-hero-sub">
                 Connect restaurants with NGOs. Reduce waste. Feed communities.
                 Every kilogram of surplus food saved is a meal delivered to
                 someone who needs it.
               </p>
 
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/register?role=donor"
-                  className="rounded-2xl bg-green-600 px-7 py-3.5 text-base font-semibold text-white shadow-md transition hover:bg-green-700 active:scale-95"
-                >
-                  🍽️ Donate Food
+              <div className="ff-cta-row">
+                <Link href="/register?role=donor" className="btn-hero-primary">
+                  🍽️ Donate Food <span style={{marginLeft: 2}}>→</span>
                 </Link>
-                <Link
-                  href="/register?role=ngo"
-                  className="rounded-2xl border-2 border-orange-400 bg-orange-50 px-7 py-3.5 text-base font-semibold text-orange-700 transition hover:bg-orange-100 active:scale-95"
-                >
-                  🤝 Find Food
+                <Link href="/register?role=ngo" className="btn-hero-secondary">
+                  🤝 Find Food <span style={{marginLeft: 2}}>→</span>
                 </Link>
               </div>
 
-              <HeroStats
-                stats={{
-                  mealsSaved: stats.mealsSaved,
-                  donors: stats.donors,
-                  ngos: stats.ngos,
-                }}
-              />
+              <div className="ff-mini-stats">
+                <div>
+                  <div className="ff-mini-stat-value">{formatNumber(stats.mealsSaved)}+</div>
+                  <div className="ff-mini-stat-label">Meals saved</div>
+                </div>
+                <div style={{width: 1, background: 'var(--ff-border)'}} />
+                <div>
+                  <div className="ff-mini-stat-value">{stats.donors}+</div>
+                  <div className="ff-mini-stat-label">Active donors</div>
+                </div>
+                <div style={{width: 1, background: 'var(--ff-border)'}} />
+                <div>
+                  <div className="ff-mini-stat-value">{stats.ngos}+</div>
+                  <div className="ff-mini-stat-label">NGO partners</div>
+                </div>
+              </div>
             </div>
 
-            {/* Right — floating mock UI cards */}
-            <div className="relative flex items-center justify-center lg:h-[480px]">
-              {/* Main listing card */}
-              <div className="absolute left-0 top-0 z-10 w-64 animate-float rounded-2xl border border-slate-100 bg-white p-5 shadow-lg" style={{ animationDelay: "0s" }}>
-                <div className="mb-3 flex items-start justify-between">
-                  <div>
-                    <div className="font-display text-sm font-bold text-slate-900">
-                      Biryani &amp; Dal
-                    </div>
-                    <div className="text-xs text-slate-400">Fresh · 50 meals</div>
-                  </div>
-                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                    Available
-                  </span>
-                </div>
-                <div className="mb-3 flex items-center gap-2 text-xs text-slate-500">
-                  <span className="text-green-600">📍</span>
-                  Andheri West — 1.8 km
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-100 text-xs">
-                    🏢
-                  </div>
-                  <span className="text-xs font-medium text-slate-600">
-                    Claimed by Hope NGO
-                  </span>
+            <div className="ff-hero-visual">
+              <div className="ff-hero-bg-circle" />
+
+              <div className="ff-card-float ff-card-listing">
+                <span className="ff-card-listing-tag">✓ Available Now</span>
+                <div className="ff-card-listing-title">Biryani &amp; Dal</div>
+                <div className="ff-card-listing-sub">Cooked · 50 meals · Andheri West</div>
+                <div className="ff-card-listing-footer">
+                  <div className="ff-avatar-xs">🏢</div>
+                  Claimed by Hope NGO · 1.8 km
                 </div>
               </div>
 
-              {/* Volunteer card */}
-              <div className="absolute bottom-8 right-0 z-10 w-56 animate-float rounded-2xl border border-slate-100 bg-white p-4 shadow-lg" style={{ animationDelay: "1.5s" }}>
-                <div className="mb-2 flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-100 text-lg">
-                    🚴
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      Ravi Kumar
-                    </div>
-                    <div className="text-xs text-slate-400">Volunteer</div>
-                  </div>
-                </div>
-                <div className="rounded-xl bg-green-50 px-3 py-2 text-xs font-medium text-green-700">
-                  ✓ Pickup complete — Delivering
-                </div>
-              </div>
-
-              {/* Center illustration */}
-              <div className="relative flex h-72 w-72 items-center justify-center rounded-3xl bg-gradient-to-br from-green-100 to-emerald-50 shadow-inner">
-                <svg
-                  viewBox="0 0 240 240"
-                  fill="none"
-                  className="h-56 w-56"
-                  aria-hidden="true"
-                >
-                  <ellipse cx="120" cy="155" rx="65" ry="18" fill="#bbf7d0" />
-                  <ellipse cx="120" cy="148" rx="60" ry="14" fill="#dcfce7" />
-                  <circle cx="105" cy="140" r="14" fill="#fca5a5" />
-                  <circle cx="128" cy="135" r="11" fill="#fdba74" />
-                  <circle cx="145" cy="142" r="9" fill="#86efac" />
-                  <circle cx="117" cy="148" r="7" fill="#fde68a" />
-                  <path d="M105 118 Q108 110 105 102" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M120 114 Q123 106 120 98" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M135 118 Q138 110 135 102" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
-                  <ellipse cx="120" cy="198" rx="12" ry="4" fill="#bbf7d0" />
-                  <path d="M120 195 L110 175 A14 14 0 1 1 130 175 Z" fill="#16a34a" />
-                  <circle cx="120" cy="172" r="5" fill="white" />
-                  <path d="M60 120 Q70 108 80 112 L85 130" stroke="#fb923c" strokeWidth="5" strokeLinecap="round" fill="none" />
-                  <path d="M180 120 Q170 108 160 112 L155 130" stroke="#16a34a" strokeWidth="5" strokeLinecap="round" fill="none" />
+              <div style={{
+                position: 'relative',
+                width: 200, height: 200,
+                background: 'linear-gradient(135deg, #e8f5ee, #d4edde)',
+                borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 1
+              }}>
+                <svg viewBox="0 0 160 160" width="140" height="140" aria-hidden="true">
+                  <ellipse cx="80" cy="106" rx="46" ry="14" fill="#bbf7d0" />
+                  <ellipse cx="80" cy="100" rx="42" ry="10" fill="#dcfce7" />
+                  <circle cx="68" cy="93" r="11" fill="#fca5a5" />
+                  <circle cx="86" cy="88" r="9" fill="#fdba74" />
+                  <circle cx="100" cy="95" r="7" fill="#86efac" />
+                  <circle cx="78" cy="100" r="5.5" fill="#fde68a" />
+                  <path d="M68 76 Q70 70 68 63" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+                  <path d="M80 73 Q82 67 80 60" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+                  <path d="M92 76 Q94 70 92 63" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+                  <ellipse cx="80" cy="136" rx="9" ry="3" fill="#bbf7d0" />
+                  <path d="M80 134 L72 116 A10 10 0 1 1 88 116 Z" fill="#16a34a" />
+                  <circle cx="80" cy="113" r="4" fill="white" />
+                  <path d="M36 76 Q43 68 50 72 L53 84" stroke="#fb923c" strokeWidth="4" strokeLinecap="round" fill="none"/>
+                  <path d="M124 76 Q117 68 110 72 L107 84" stroke="#16a34a" strokeWidth="4" strokeLinecap="round" fill="none"/>
                 </svg>
               </div>
 
-              {/* Stat chip */}
-              <div className="absolute -right-4 top-16 animate-float rounded-2xl border border-green-100 bg-white px-4 py-3 shadow-md" style={{ animationDelay: "0.8s" }}>
-                <div className="font-display text-2xl font-bold text-green-600">
-                  2.4k+
+              <div className="ff-card-float ff-card-stat">
+                <div className="ff-card-stat-num">2.4k+</div>
+                <div className="ff-card-stat-label">meals saved</div>
+              </div>
+
+              <div className="ff-card-float ff-card-volunteer">
+                <div className="ff-card-vol-top">
+                  <div className="ff-vol-avatar">🚴</div>
+                  <div>
+                    <div className="ff-vol-name">Ravi Kumar</div>
+                    <div className="ff-vol-role">Volunteer</div>
+                  </div>
                 </div>
-                <div className="text-xs text-slate-500">meals saved</div>
+                <div className="ff-vol-status">
+                  <span style={{width:7, height:7, borderRadius:'50%', background:'var(--ff-leaf)', display:'inline-block'}} />
+                  Delivering now
+                </div>
+              </div>
+
+              <div className="ff-card-float ff-card-match">
+                <div className="ff-match-icon">🤖</div>
+                <div>
+                  <div className="ff-match-text">Smart Match Found</div>
+                  <div className="ff-match-sub">NGO · 2.3 km away</div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── HOW IT WORKS ─────────────────────────────────────── */}
-      <section id="how-it-works" className="bg-white px-5 py-24 sm:px-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="mb-14 text-center">
-            <span className="mb-3 inline-block rounded-full bg-green-50 px-4 py-1.5 text-sm font-semibold text-green-700">
-              Simple 3-Step Process
-            </span>
-            <h2 className="font-display text-4xl font-bold text-slate-900">
-              How It Works
-            </h2>
-          </div>
-
-          <div className="grid gap-8 sm:grid-cols-3">
-            {[
-              {
-                step: "01",
-                icon: "🍽️",
-                title: "Donor Posts Surplus",
-                desc: "Restaurants and households post their surplus food with quantity, photos, and pickup location.",
-                color: "bg-green-50",
-                iconBg: "bg-green-100",
-                accent: "text-green-700",
-              },
-              {
-                step: "02",
-                icon: "🤝",
-                title: "NGO Claims Listing",
-                desc: "Nearby NGOs browse the live map, claim the listing, and coordinate with the donor.",
-                color: "bg-blue-50",
-                iconBg: "bg-blue-100",
-                accent: "text-blue-700",
-              },
-              {
-                step: "03",
-                icon: "🚗",
-                title: "Volunteer Delivers",
-                desc: "A volunteer accepts the pickup task, follows the route, and delivers food to the NGO.",
-                color: "bg-orange-50",
-                iconBg: "bg-orange-100",
-                accent: "text-orange-700",
-              },
-            ].map((item, idx) => (
-              <div key={item.step} className="relative flex flex-col items-center text-center">
-                {idx < 2 && (
-                  <div className="absolute -right-4 top-12 z-10 hidden text-2xl text-slate-300 sm:block">
-                    →
-                  </div>
-                )}
-                <div
-                  className={`w-full rounded-3xl ${item.color} p-8 transition-all duration-200 hover:-translate-y-1 hover:shadow-md`}
-                >
-                  <div
-                    className={`mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl text-3xl shadow-sm ${item.iconBg}`}
-                  >
+        <section className="ff-trust">
+          <div className="ff-trust-inner">
+            <div className="ff-trust-label">Why FeedForward</div>
+            <div className="ff-trust-grid">
+              {[
+                { icon: '⚡', bg: '#fef9c3', title: '60-Second Listing', desc: 'Post surplus food in under a minute with smart defaults and clear pickup windows.' },
+                { icon: '📍', bg: '#e8f5ee', title: 'Location-Smart Matching', desc: 'NGOs within your radius are automatically notified so food reaches people faster.' },
+                { icon: '🔔', bg: '#eff6ff', title: 'Real-Time Updates', desc: 'Every status change — claim, pickup, delivery — is pushed to all parties instantly.' },
+              ].map(item => (
+                <div key={item.title} className="ff-trust-item">
+                  <div className="ff-trust-icon-wrap" style={{ background: item.bg }}>
                     {item.icon}
                   </div>
-                  <div
-                    className={`mb-2 font-display text-5xl font-black opacity-10 ${item.accent}`}
-                  >
-                    {item.step}
+                  <div>
+                    <div className="ff-trust-title">{item.title}</div>
+                    <div className="ff-trust-desc">{item.desc}</div>
                   </div>
-                  <h3 className="mb-3 font-display text-lg font-bold text-slate-900">
-                    {item.title}
-                  </h3>
-                  <p className="text-sm leading-relaxed text-slate-500">
-                    {item.desc}
-                  </p>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── IMPACT STATS ─────────────────────────────────────── */}
-      <section id="impact" className="bg-green-900 px-5 py-20 text-white sm:px-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="mb-12 text-center">
-            <h2 className="font-display text-4xl font-bold">
-              Our Impact, In Numbers
-            </h2>
-            <p className="mt-3 text-green-200">
-              Real data from our growing community
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
-            {[
-              {
-                value: formatNumber(stats.mealsSaved) + "+",
-                label: "Meals Saved",
-                icon: "🍱",
-              },
-              {
-                value: formatNumber(stats.foodWastePrevented) + " kg",
-                label: "Food Waste Prevented",
-                icon: "♻️",
-              },
-              {
-                value: stats.activeVolunteers + "+",
-                label: "Active Volunteers",
-                icon: "🚴",
-              },
-              {
-                value: stats.citiesCovered + "+",
-                label: "Cities Covered",
-                icon: "🏙️",
-              },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-2xl bg-white/10 p-6 text-center backdrop-blur-sm ring-1 ring-white/20"
-              >
-                <div className="mb-2 text-4xl">{item.icon}</div>
-                <div className="font-display text-3xl font-extrabold">
-                  {item.value}
+        <section id="how-it-works" className="ff-section ff-steps" style={{ background: 'white' }}>
+          <div className="ff-section-inner">
+            <div className="ff-section-head">
+              <div className="ff-section-tag" style={{ background: '#e8f5ee', color: 'var(--ff-leaf)' }}>Simple Process</div>
+              <h2 className="ff-section-h2 font-display">How It Works</h2>
+              <p className="ff-section-sub">Three steps from surplus to served</p>
+            </div>
+            <div className="ff-steps-grid">
+              {[
+                { num: '01', emoji: '🍽️', title: 'Donor Posts Surplus', desc: 'Restaurants and households post surplus food with quantity, photos, expiry, and pickup location — in under a minute.' },
+                { num: '02', emoji: '🤝', title: 'NGO Claims Listing', desc: 'Nearby NGOs browse the live map, see real-time availability, claim the listing, and coordinate with the donor.' },
+                { num: '03', emoji: '🚗', title: 'Volunteer Delivers', desc: 'A volunteer accepts the task, follows optimised route guidance, and delivers the food to NGO safely.' },
+              ].map(item => (
+                <div key={item.num} className="ff-step-card">
+                  <div className="ff-step-num font-display">{item.num}</div>
+                  <span className="ff-step-emoji">{item.emoji}</span>
+                  <div className="ff-step-title font-display">{item.title}</div>
+                  <div className="ff-step-desc">{item.desc}</div>
                 </div>
-                <div className="mt-1 text-sm font-medium text-green-200">
-                  {item.label}
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="impact" className="ff-section ff-impact">
+          <div className="ff-section-inner">
+            <div className="ff-section-head">
+              <div className="ff-section-tag ff-impact-tag">Live Data</div>
+              <h2 className="ff-section-h2 font-display">Our Impact, In Numbers</h2>
+              <p className="ff-section-sub ff-impact-sub">Real numbers from our growing community</p>
+            </div>
+            <div className="ff-impact-grid">
+              {[
+                { icon: '🍱', value: `${formatNumber(stats.mealsSaved)}+`, label: 'Meals Saved' },
+                { icon: '♻️', value: `${formatNumber(stats.foodWastePrevented)} kg`, label: 'Waste Prevented' },
+                { icon: '🚴', value: `${stats.activeVolunteers}+`, label: 'Active Volunteers' },
+                { icon: '🏙️', value: `${stats.citiesCovered}+`, label: 'Cities Covered' },
+              ].map(item => (
+                <div key={item.label} className="ff-impact-card">
+                  <div className="ff-impact-icon">{item.icon}</div>
+                  <div className="ff-impact-num font-display">{item.value}</div>
+                  <div className="ff-impact-label">{item.label}</div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── ROLE CARDS ───────────────────────────────────────── */}
-      <section id="join" className="bg-slate-50 px-5 py-24 sm:px-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="mb-14 text-center">
-            <span className="mb-3 inline-block rounded-full bg-slate-200 px-4 py-1.5 text-sm font-semibold text-slate-600">
-              Choose Your Role
-            </span>
-            <h2 className="font-display text-4xl font-bold text-slate-900">
-              Join the Movement
-            </h2>
-          </div>
-
-          <div className="grid gap-6 sm:grid-cols-3">
-            {[
-              {
-                icon: "🍽️",
-                role: "Donor",
-                gradient: "from-green-500 to-emerald-600",
-                light: "bg-green-50",
-                btn: "bg-green-600 hover:bg-green-700",
-                points: [
-                  "Post surplus food in 60 seconds",
-                  "Set pickup window & quantity",
-                  "Track who claimed your listing",
-                  "See real-time delivery status",
-                ],
-              },
-              {
-                icon: "🤝",
-                role: "NGO",
-                gradient: "from-blue-500 to-indigo-600",
-                light: "bg-blue-50",
-                btn: "bg-blue-600 hover:bg-blue-700",
-                points: [
-                  "Browse listings on a live map",
-                  "Claim food near your location",
-                  "Coordinate with volunteers",
-                  "Track your monthly impact",
-                ],
-              },
-              {
-                icon: "🚗",
-                role: "Volunteer",
-                gradient: "from-orange-500 to-red-500",
-                light: "bg-orange-50",
-                btn: "bg-orange-600 hover:bg-orange-700",
-                points: [
-                  "Pick up available delivery tasks",
-                  "Follow turn-by-turn route guidance",
-                  "Mark pickup & drop-off progress",
-                  "Build your volunteer profile",
-                ],
-              },
-            ].map((item) => (
-              <div
-                key={item.role}
-                className="flex flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-md"
-              >
-                <div
-                  className={`h-2 w-full bg-gradient-to-r ${item.gradient}`}
-                />
-                <div className="flex flex-1 flex-col p-7">
-                  <div
-                    className={`mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-3xl shadow-sm ${item.light}`}
-                  >
-                    {item.icon}
+        <section id="join" className="ff-section ff-roles">
+          <div className="ff-section-inner">
+            <div className="ff-section-head">
+              <div className="ff-section-tag" style={{ background: 'var(--ff-stone-light)', color: 'var(--ff-stone-mid)' }}>Choose Your Role</div>
+              <h2 className="ff-section-h2 font-display">Join the Movement</h2>
+              <p className="ff-section-sub">Pick a role and start making a difference today</p>
+            </div>
+            <div className="ff-roles-grid">
+              {[
+                {
+                  cls: 'role-green', icon: '🍽️', role: 'Donor', label: 'Restaurant / Hotel',
+                  points: ['Post surplus food in 60 seconds', 'Set pickup window & quantity', 'Track who claimed your listing', 'See real-time delivery status'],
+                  btnText: 'Join as Donor',
+                },
+                {
+                  cls: 'role-blue', icon: '🤝', role: 'NGO', label: 'Organisation',
+                  points: ['Browse listings on a live map', 'Claim food near your location', 'Coordinate with volunteers', 'Track your monthly impact'],
+                  btnText: 'Join as NGO',
+                },
+                {
+                  cls: 'role-amber', icon: '🚗', role: 'Volunteer', label: 'Individual',
+                  points: ['Pick up available delivery tasks', 'Follow route guidance', 'Mark pickup & drop-off progress', 'Build your volunteer profile'],
+                  btnText: 'Join as Volunteer',
+                },
+              ].map(item => (
+                <div key={item.role} className={`ff-role-card ${item.cls}`}>
+                  <div className="ff-role-card-top">
+                    <div className="ff-role-icon">{item.icon}</div>
+                    <span className="ff-role-card-label">{item.label}</span>
                   </div>
-                  <h3 className="mb-4 font-display text-xl font-bold text-slate-900">
-                    {item.role}
-                  </h3>
-                  <ul className="mb-7 flex-1 space-y-2">
-                    {item.points.map((p) => (
-                      <li
-                        key={p}
-                        className="flex items-start gap-2 text-sm text-slate-600"
-                      >
-                        <span className="mt-0.5 text-green-500">✓</span>
-                        {p}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link
-                    href={`/register?role=${item.role.toLowerCase()}`}
-                    className={`w-full rounded-xl py-3 text-center text-sm font-semibold text-white transition active:scale-95 ${item.btn}`}
-                  >
-                    Join as {item.role} →
-                  </Link>
+                  <div className="ff-role-card-body">
+                    <div className="ff-role-title font-display">{item.role}</div>
+                    <ul className="ff-role-points">
+                      {item.points.map(p => (
+                        <li key={p}>
+                          <span className="ff-role-check">✓</span>
+                          {p}
+                        </li>
+                      ))}
+                    </ul>
+                    <Link href={`/register?role=${item.role.toLowerCase()}`} className="ff-role-btn">
+                      {item.btnText} →
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── CTA BANNER ───────────────────────────────────────── */}
-      <section className="bg-gradient-to-br from-green-600 to-emerald-700 px-5 py-20 text-white sm:px-8">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="mb-4 font-display text-4xl font-extrabold">
-            Ready to make a difference?
-          </h2>
-          <p className="mb-8 text-lg text-green-100">
-            Join thousands of donors, NGOs, and volunteers already saving food
-            and feeding communities.
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <Link
-              href="/register"
-              className="rounded-2xl bg-white px-8 py-4 text-base font-bold text-green-700 shadow-lg transition hover:bg-green-50 active:scale-95"
-            >
+        <section className="ff-section ff-testimonials">
+          <div className="ff-section-inner">
+            <div className="ff-section-head">
+              <div className="ff-section-tag" style={{ background: 'var(--ff-amber-light)', color: 'var(--ff-amber)' }}>Community Stories</div>
+              <h2 className="ff-section-h2 font-display">Real Impact, Real People</h2>
+            </div>
+            <div className="ff-testimonials-grid">
+              {[
+                {
+                  quote: 'We reduced our daily food waste by 40% and now every extra meal finds a purpose. The platform made it genuinely easy.',
+                  name: 'Ananya Patel', role: 'Restaurant Owner · Donor',
+                  avatar: 'AP', avatarBg: '#e8f5ee', avatarColor: 'var(--ff-leaf)',
+                },
+                {
+                  quote: 'Claiming nearby listings is simple, and the volunteer coordination is incredibly smooth. Our shelter is better fed than ever.',
+                  name: 'Hope Trust', role: 'NGO Partner · Mumbai',
+                  avatar: 'HT', avatarBg: '#eff6ff', avatarColor: '#2563eb',
+                },
+                {
+                  quote: 'I can help after work and complete deliveries quickly with route guidance. It feels great to contribute to something real.',
+                  name: 'Ravi Kumar', role: 'Volunteer · Hyderabad',
+                  avatar: 'RK', avatarBg: 'var(--ff-amber-light)', avatarColor: 'var(--ff-amber)',
+                },
+              ].map(item => (
+                <article key={item.name} className="ff-testimonial">
+                  <div className="ff-testimonial-stars">★★★★★</div>
+                  <p className="ff-testimonial-quote">&ldquo;{item.quote}&rdquo;</p>
+                  <div className="ff-testimonial-footer">
+                    <div className="ff-testimonial-avatar" style={{ background: item.avatarBg, color: item.avatarColor }}>
+                      {item.avatar}
+                    </div>
+                    <div>
+                      <div className="ff-testimonial-name">{item.name}</div>
+                      <div className="ff-testimonial-role">{item.role}</div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <div className="ff-cta-banner">
+          <h2 className="font-display">Ready to make a difference?</h2>
+          <p>Join thousands of donors, NGOs, and volunteers already saving food and feeding communities across India.</p>
+          <div className="ff-cta-row">
+            <Link href="/register" className="btn-cta-white">
               Join FeedForward — It&apos;s Free
             </Link>
-            <Link
-              href="/login"
-              className="rounded-2xl border-2 border-white/50 px-8 py-4 text-base font-semibold text-white transition hover:border-white hover:bg-white/10 active:scale-95"
-            >
+            <Link href="/login" className="btn-cta-outline">
               Sign In
             </Link>
           </div>
         </div>
-      </section>
 
-      {/* ── FOOTER ───────────────────────────────────────────── */}
-      <footer className="border-t border-slate-100 bg-white px-5 py-12 sm:px-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
-            <div>
-              <Link
-                href="/"
-                className="flex items-center gap-2 font-display text-xl font-bold text-slate-900"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-600 text-lg">
-                  🌿
-                </span>
-                FeedForward
-              </Link>
-              <p className="mt-1.5 text-sm text-slate-400">
-                Turn surplus into support.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-6 text-sm text-slate-500">
-              <a href="#" className="transition hover:text-slate-800">About</a>
-              <a href="#" className="transition hover:text-slate-800">Contact</a>
-              <a href="#" className="transition hover:text-slate-800">Privacy</a>
-            </div>
+        <footer className="ff-footer">
+          <div className="ff-footer-inner">
+            <Link href="/" className="ff-logo ff-footer-logo">
+              <div className="ff-logo-mark">🌿</div>
+              FeedForward
+            </Link>
+            <ul className="ff-footer-links">
+              <li><a href="#">About</a></li>
+              <li><a href="#">Contact</a></li>
+              <li><a href="#">Privacy</a></li>
+            </ul>
           </div>
-
-          <div className="mt-8 border-t border-slate-100 pt-6 text-center text-xs text-slate-400">
-            Built for good 🌱 · © {CURRENT_YEAR} FeedForward. All
-            rights reserved.
+          <div className="ff-footer-copy">
+            Built for good 🌱 · © {CURRENT_YEAR} FeedForward. All rights reserved.
           </div>
-        </div>
-      </footer>
-    </div>
+        </footer>
+
+      </div>
+    </>
   );
 }

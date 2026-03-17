@@ -17,6 +17,8 @@ export interface IUser extends Document {
   };
   /** Volunteer only: per-km rate in INR (default 10) */
   pricePerKm?: number;
+  /** Volunteer only: average rating out of 5 */
+  rating?: number;
   createdAt: Date;
 }
 
@@ -33,6 +35,7 @@ const UserSchema = new Schema<IUser>({
     coordinates: { type: [Number] },
   },
   pricePerKm: { type: Number, min: 1, max: 200, default: 10 },
+  rating: { type: Number, min: 0, max: 5, default: 0 },
   createdAt: { type: Date, default: Date.now },
 });
 

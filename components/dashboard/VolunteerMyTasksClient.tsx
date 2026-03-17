@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Clock, Package, CheckCircle2, Loader2, RefreshCw, Map } from "lucide-react";
+import { Clock, Package, CheckCircle2, Loader2, RefreshCw, Map, KeyRound, X } from "lucide-react";
 import dynamic from "next/dynamic";
 
 const RouteMap = dynamic(() => import("@/components/maps/RouteMap"), { ssr: false });
@@ -43,11 +43,14 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
 
+type OTPState = { taskId: string; type: "pickup" | "delivery"; code: string; error: string; submitting: boolean };
+
 export default function VolunteerMyTasksClient({ sessionUser }: { sessionUser: SessionUser }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState<string | null>(null);
   const [routeTask, setRouteTask] = useState<Task | null>(null);
+  const [otpState, setOtpState] = useState<OTPState | null>(null);
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -64,19 +67,39 @@ export default function VolunteerMyTasksClient({ sessionUser }: { sessionUser: S
     void fetchTasks();
   }, [fetchTasks]);
 
-  async function updateStatus(id: string, status: "picked_up" | "delivered") {
-    setUpdating(id);
+  function openOTP(taskId: string, type: "pickup" | "delivery") {
+    setOtpState({ taskId, type, code: "", error: "", submitting: false });
+    setTimeout(() => otpInputRef.current?.focus(), 50);
+  }
+
+  function closeOTP() {
+    setOtpState(null);
+  }
+
+  async function submitOTP() {
+    if (!otpState) return;
+    const { taskId, type, code } = otpState;
+    if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+      setOtpState((s) => s ? { ...s, error: "Enter the 6-digit code." } : s);
+      return;
+    }
+    setOtpState((s) => s ? { ...s, submitting: true, error: "" } : s);
     try {
-      const res = await fetch(`/api/listings/${id}/status`, {
+      const res = await fetch("/api/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ listingId: taskId, code, type }),
       });
+      const data = (await res.json()) as { message?: string; status?: string; error?: string };
       if (res.ok) {
-        setTasks((prev) => prev.map((t) => t._id === id ? { ...t, status } : t));
+        const newStatus = type === "pickup" ? "picked_up" : "delivered";
+        setTasks((prev) => prev.map((t) => t._id === taskId ? { ...t, status: newStatus as Task["status"] } : t));
+        setOtpState(null);
+      } else {
+        setOtpState((s) => s ? { ...s, submitting: false, error: data.error ?? "Verification failed." } : s);
       }
-    } finally {
-      setUpdating(null);
+    } catch {
+      setOtpState((s) => s ? { ...s, submitting: false, error: "Network error. Please try again." } : s);
     }
   }
 
@@ -112,6 +135,18 @@ export default function VolunteerMyTasksClient({ sessionUser }: { sessionUser: S
         .vm-status-btn { flex:2; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:8px 12px; border-radius:10px; border:none; font-family:'DM Sans',sans-serif; font-size:0.82rem; font-weight:600; color:white; cursor:pointer; transition:all 0.15s; }
         .vm-status-btn:disabled { opacity:0.6; cursor:not-allowed; }
         .vm-empty { text-align:center; padding:3rem 2rem; background:white; border-radius:18px; border:1.5px dashed rgba(44,40,32,0.12); }
+        .vm-otp-overlay { position:fixed; inset:0; background:rgba(44,40,32,0.55); backdrop-filter:blur(6px); z-index:300; display:flex; align-items:center; justify-content:center; padding:1rem; }
+        .vm-otp-box { background:white; border-radius:24px; width:100%; max-width:360px; padding:2rem; box-shadow:0 24px 80px rgba(44,40,32,0.25); }
+        .vm-otp-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem; }
+        .vm-otp-title { font-family:'Fraunces',serif; font-size:1.1rem; font-weight:800; color:#2c2820; }
+        .vm-otp-close { width:30px; height:30px; border-radius:50%; border:none; background:rgba(44,40,32,0.08); cursor:pointer; display:flex; align-items:center; justify-content:center; color:#6b6560; }
+        .vm-otp-sub { font-size:0.8rem; color:#6b6560; margin-bottom:1.25rem; line-height:1.5; }
+        .vm-otp-input { width:100%; font-family:monospace; font-size:2rem; font-weight:800; letter-spacing:0.3em; text-align:center; border:2px solid rgba(44,40,32,0.15); border-radius:14px; padding:0.75rem 1rem; outline:none; transition:border-color 0.15s; box-sizing:border-box; }
+        .vm-otp-input:focus { border-color:#1e40af; }
+        .vm-otp-error { font-size:0.75rem; color:#dc2626; margin-top:0.5rem; min-height:18px; }
+        .vm-otp-submit { width:100%; margin-top:1rem; padding:0.85rem; border-radius:14px; border:none; background:#1e40af; color:white; font-family:'DM Sans',sans-serif; font-size:0.9rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:all 0.15s; }
+        .vm-otp-submit:disabled { opacity:0.6; cursor:not-allowed; }
+        .vm-otp-submit:not(:disabled):hover { background:#1d4ed8; }
         .vm-empty-icon { font-size:2.5rem; margin-bottom:0.75rem; opacity:0.35; }
         .vm-empty-title { font-family:'Fraunces',serif; font-size:1rem; font-weight:700; color:#2c2820; margin-bottom:0.4rem; }
         .vm-empty-sub { font-size:0.82rem; color:#a09a94; font-weight:300; }
@@ -180,22 +215,18 @@ export default function VolunteerMyTasksClient({ sessionUser }: { sessionUser: S
                               <button
                                 className="vm-status-btn"
                                 style={{ background: "#1e40af" }}
-                                disabled={updating === task._id}
-                                onClick={() => void updateStatus(task._id, "picked_up")}
+                                onClick={() => openOTP(task._id, "pickup")}
                               >
-                                {updating === task._id ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <CheckCircle2 size={13} />}
-                                {updating === task._id ? "Updating..." : "Mark Picked Up"}
+                                <KeyRound size={13} /> Enter Pickup OTP
                               </button>
                             )}
                             {task.status === "picked_up" && (
                               <button
                                 className="vm-status-btn"
                                 style={{ background: "#5b21b6" }}
-                                disabled={updating === task._id}
-                                onClick={() => void updateStatus(task._id, "delivered")}
+                                onClick={() => openOTP(task._id, "delivery")}
                               >
-                                {updating === task._id ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <CheckCircle2 size={13} />}
-                                {updating === task._id ? "Updating..." : "Mark Delivered"}
+                                <KeyRound size={13} /> Enter Delivery OTP
                               </button>
                             )}
                           </div>
@@ -233,6 +264,50 @@ export default function VolunteerMyTasksClient({ sessionUser }: { sessionUser: S
           )}
         </div>
       </div>
+
+      {otpState && (
+        <div className="vm-otp-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeOTP(); }}>
+          <div className="vm-otp-box">
+            <div className="vm-otp-header">
+              <div className="vm-otp-title">
+                <KeyRound size={16} style={{ display: "inline", marginRight: 6, verticalAlign: "text-bottom" }} />
+                {otpState.type === "pickup" ? "Confirm Pickup" : "Confirm Delivery"}
+              </div>
+              <button className="vm-otp-close" onClick={closeOTP}><X size={14} /></button>
+            </div>
+            <div className="vm-otp-sub">
+              {otpState.type === "pickup"
+                ? "Enter the 6-digit pickup code shown on the donor's dashboard."
+                : "Enter the 6-digit delivery code shown on the NGO's dashboard."}
+            </div>
+            <input
+              ref={otpInputRef}
+              className="vm-otp-input"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="000000"
+              value={otpState.code}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                setOtpState((s) => s ? { ...s, code: val, error: "" } : s);
+              }}
+              onKeyDown={(e) => { if (e.key === "Enter") void submitOTP(); }}
+              disabled={otpState.submitting}
+            />
+            <div className="vm-otp-error">{otpState.error}</div>
+            <button
+              className="vm-otp-submit"
+              disabled={otpState.submitting || otpState.code.length !== 6}
+              onClick={() => void submitOTP()}
+            >
+              {otpState.submitting
+                ? <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> Verifying…</>
+                : <><CheckCircle2 size={15} /> Verify & Confirm</>}
+            </button>
+          </div>
+        </div>
+      )}
 
       {routeTask && (
         <div className="vm-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setRouteTask(null); }}>

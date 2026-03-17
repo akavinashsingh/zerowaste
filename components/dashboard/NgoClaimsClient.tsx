@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Clock, Phone, Truck, Package } from "lucide-react";
+import { Clock, Phone, Truck, Package, KeyRound, RefreshCw } from "lucide-react";
 
 type FoodItem = { name: string; quantity: string; unit: string };
 type Listing = {
@@ -30,9 +30,12 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+type OTPInfo = { code: string | null; minutesLeft?: number; loading: boolean };
+
 export default function NgoClaimsClient() {
   const [claims, setClaims] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [otpMap, setOtpMap] = useState<Record<string, OTPInfo>>({});
 
   const fetchClaims = useCallback(async () => {
     setLoading(true);
@@ -48,6 +51,17 @@ export default function NgoClaimsClient() {
   useEffect(() => {
     void fetchClaims();
   }, [fetchClaims]);
+
+  async function fetchOTP(listingId: string) {
+    setOtpMap((prev) => ({ ...prev, [listingId]: { code: null, loading: true } }));
+    try {
+      const res = await fetch(`/api/otp/view?listingId=${listingId}&type=delivery`);
+      const data = (await res.json()) as { code?: string | null; minutesLeft?: number };
+      setOtpMap((prev) => ({ ...prev, [listingId]: { code: data.code ?? null, minutesLeft: data.minutesLeft, loading: false } }));
+    } catch {
+      setOtpMap((prev) => ({ ...prev, [listingId]: { code: null, loading: false } }));
+    }
+  }
 
   const active = claims.filter((c) => c.status !== "delivered" && c.status !== "expired");
   const completed = claims.filter((c) => c.status === "delivered");
@@ -73,6 +87,12 @@ export default function NgoClaimsClient() {
         .nc-meta { font-size:0.78rem; color:#6b6560; display:flex; flex-direction:column; gap:5px; margin-bottom:0.875rem; }
         .nc-meta-row { display:flex; align-items:center; gap:6px; }
         .nc-chip { display:flex; align-items:center; gap:7px; padding:7px 11px; border-radius:11px; font-size:0.75rem; font-weight:600; margin-top:4px; }
+        .nc-otp-box { margin-top:8px; padding:10px 12px; border-radius:12px; background:#f0fdf4; border:1.5px solid rgba(22,163,74,0.2); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+        .nc-otp-label { font-size:0.68rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#15803d; }
+        .nc-otp-code { font-family:monospace; font-size:1.35rem; font-weight:800; letter-spacing:0.22em; color:#14532d; }
+        .nc-otp-timer { font-size:0.65rem; color:#15803d; opacity:0.75; margin-top:1px; }
+        .nc-otp-btn { display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:8px; border:1.5px solid rgba(22,163,74,0.25); background:white; font-family:'DM Sans',sans-serif; font-size:0.72rem; font-weight:600; color:#15803d; cursor:pointer; white-space:nowrap; transition:all 0.15s; }
+        .nc-otp-btn:hover { background:#f0fdf4; }
         .nc-empty { text-align:center; padding:3rem 2rem; background:white; border-radius:18px; border:1.5px dashed rgba(44,40,32,0.12); }
         .nc-empty-icon { font-size:2.5rem; margin-bottom:0.75rem; opacity:0.35; }
         .nc-empty-title { font-family:'Fraunces',serif; font-size:1.1rem; font-weight:700; color:#2c2820; margin-bottom:0.4rem; }
@@ -127,6 +147,36 @@ export default function NgoClaimsClient() {
                               <Truck size={13} /> Awaiting volunteer assignment
                             </div>
                           )}
+                          {c.status === "picked_up" && (() => {
+                            const otp = otpMap[c._id];
+                            if (!otp) {
+                              return (
+                                <button className="nc-otp-btn" style={{ marginTop: 8, width: "100%", justifyContent: "center" }} onClick={() => void fetchOTP(c._id)}>
+                                  <KeyRound size={12} /> Show Delivery Code
+                                </button>
+                              );
+                            }
+                            if (otp.loading) {
+                              return (
+                                <div className="nc-otp-box">
+                                  <span className="nc-otp-label">Delivery Code</span>
+                                  <span style={{ fontSize: "0.75rem", color: "#15803d" }}>Loading…</span>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="nc-otp-box">
+                                <div>
+                                  <div className="nc-otp-label"><KeyRound size={10} style={{ display: "inline", marginRight: 3 }} />Delivery Code — share with volunteer</div>
+                                  <div className="nc-otp-code">{otp.code ?? "—"}</div>
+                                  {otp.minutesLeft !== undefined && <div className="nc-otp-timer">Expires in {otp.minutesLeft} min</div>}
+                                </div>
+                                <button className="nc-otp-btn" onClick={() => void fetchOTP(c._id)} title="Refresh OTP">
+                                  <RefreshCw size={11} />
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}

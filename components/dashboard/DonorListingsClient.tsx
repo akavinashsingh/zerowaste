@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   Plus, Package, CheckCircle2, Clock, XCircle,
   MapPin, Calendar, Users, Truck, AlertTriangle,
-  Flame, Leaf, Box, Filter,
+  Flame, Leaf, Box, Filter, KeyRound, RefreshCw,
 } from "lucide-react";
 
 type FoodItem = { name: string; quantity: string; unit: string };
@@ -57,10 +57,13 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
+type OTPInfo = { code: string | null; minutesLeft?: number; loading: boolean };
+
 export default function DonorListingsClient({ onNewListing }: { onNewListing?: () => void }) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [otpMap, setOtpMap] = useState<Record<string, OTPInfo>>({});
 
   const fetchListings = useCallback(async () => {
     setLoading(true);
@@ -76,6 +79,17 @@ export default function DonorListingsClient({ onNewListing }: { onNewListing?: (
   useEffect(() => {
     void fetchListings();
   }, [fetchListings]);
+
+  async function fetchOTP(listingId: string) {
+    setOtpMap((prev) => ({ ...prev, [listingId]: { code: null, loading: true } }));
+    try {
+      const res = await fetch(`/api/otp/view?listingId=${listingId}&type=pickup`);
+      const data = (await res.json()) as { code?: string | null; minutesLeft?: number };
+      setOtpMap((prev) => ({ ...prev, [listingId]: { code: data.code ?? null, minutesLeft: data.minutesLeft, loading: false } }));
+    } catch {
+      setOtpMap((prev) => ({ ...prev, [listingId]: { code: null, loading: false } }));
+    }
+  }
 
   const filtered = statusFilter === "all" ? listings : listings.filter((l) => l.status === statusFilter);
 
@@ -133,6 +147,12 @@ export default function DonorListingsClient({ onNewListing }: { onNewListing?: (
         .dl-expiry.urgent { color:#dc2626; animation:pulse-text 2s ease-in-out infinite; }
         .dl-expiry.ok { color:#1a5c38; }
         @keyframes pulse-text { 0%,100%{opacity:1} 50%{opacity:0.6} }
+        .dl-otp-box { margin-top:8px; padding:10px 12px; border-radius:12px; background:#fff7ed; border:1.5px solid rgba(234,88,12,0.2); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+        .dl-otp-label { font-size:0.68rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#c2410c; }
+        .dl-otp-code { font-family:monospace; font-size:1.35rem; font-weight:800; letter-spacing:0.22em; color:#9a3412; }
+        .dl-otp-timer { font-size:0.65rem; color:#c2410c; opacity:0.75; margin-top:1px; }
+        .dl-otp-btn { display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:8px; border:1.5px solid rgba(234,88,12,0.25); background:white; font-family:'DM Sans',sans-serif; font-size:0.72rem; font-weight:600; color:#c2410c; cursor:pointer; white-space:nowrap; transition:all 0.15s; }
+        .dl-otp-btn:hover { background:#fff7ed; }
         .dl-empty { text-align:center; padding:4rem 2rem; background:white; border-radius:20px; border:1.5px dashed rgba(44,40,32,0.12); }
         .dl-empty-icon { font-size:2.5rem; margin-bottom:0.75rem; opacity:0.4; }
         .dl-empty-title { font-family:'Fraunces',serif; font-size:1.1rem; font-weight:700; color:#2c2820; margin-bottom:0.5rem; }
@@ -244,6 +264,36 @@ export default function DonorListingsClient({ onNewListing }: { onNewListing?: (
                           <Truck size={12} /> Volunteer: {listing.assignedVolunteer.name}
                         </div>
                       )}
+                      {listing.assignedVolunteer && listing.status === "claimed" && (() => {
+                        const otp = otpMap[listing._id];
+                        if (!otp) {
+                          return (
+                            <button className="dl-otp-btn" style={{ marginTop: 8, width: "100%", justifyContent: "center" }} onClick={() => void fetchOTP(listing._id)}>
+                              <KeyRound size={12} /> Show Pickup Code
+                            </button>
+                          );
+                        }
+                        if (otp.loading) {
+                          return (
+                            <div className="dl-otp-box">
+                              <span className="dl-otp-label">Pickup Code</span>
+                              <span style={{ fontSize: "0.75rem", color: "#c2410c" }}>Loading…</span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="dl-otp-box">
+                            <div>
+                              <div className="dl-otp-label"><KeyRound size={10} style={{ display: "inline", marginRight: 3 }} />Pickup Code — share with volunteer</div>
+                              <div className="dl-otp-code">{otp.code ?? "—"}</div>
+                              {otp.minutesLeft !== undefined && <div className="dl-otp-timer">Expires in {otp.minutesLeft} min</div>}
+                            </div>
+                            <button className="dl-otp-btn" onClick={() => void fetchOTP(listing._id)} title="Refresh OTP">
+                              <RefreshCw size={11} />
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="dl-footer">
                       <div className="dl-footer-date">Expires {fmtDate(listing.expiresAt)}</div>

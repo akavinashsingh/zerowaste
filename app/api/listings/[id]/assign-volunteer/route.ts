@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
+import { createOTP } from "@/lib/otp";
 import { sendNotification } from "@/lib/notify";
 import { calcTaskDistanceKm, calcPayoutAmount, PAYOUT_CONFIG } from "@/lib/payout";
 import FoodListing from "@/models/FoodListing";
@@ -88,6 +89,9 @@ export async function POST(
     .populate("claimedBy", "name phone address location")
     .populate("assignedVolunteer", "name phone")
     .lean();
+
+  // Auto-generate pickup OTP — donor will see this code to hand off to volunteer
+  void createOTP(id, "pickup");
 
   const notifyParams = {
     type: "volunteer_assigned",

@@ -97,6 +97,21 @@ export const updateDemandStatusSchema = z.object({
 });
 
 /* ------------------------------------------------------------------ */
+/*  OTP                                                                 */
+/* ------------------------------------------------------------------ */
+
+export const generateOTPSchema = z.object({
+  listingId: z.string().min(1, "listingId is required"),
+  type: z.enum(["pickup", "delivery"]),
+});
+
+export const verifyOTPSchema = z.object({
+  listingId: z.string().min(1, "listingId is required"),
+  code: z.string().length(6, "OTP must be exactly 6 digits").regex(/^\d{6}$/, "OTP must be numeric"),
+  type: z.enum(["pickup", "delivery"]),
+});
+
+/* ------------------------------------------------------------------ */
 /*  Admin User Management                                               */
 /* ------------------------------------------------------------------ */
 

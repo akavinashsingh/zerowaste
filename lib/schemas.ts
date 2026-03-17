@@ -67,6 +67,17 @@ export const adminUpdateListingStatusSchema = z.object({
 });
 
 /* ------------------------------------------------------------------ */
+/*  Volunteer Payout                                                    */
+/* ------------------------------------------------------------------ */
+
+export const updatePricePerKmSchema = z.object({
+  pricePerKm: z
+    .number()
+    .min(1, "Rate must be at least ₹1/km")
+    .max(200, "Rate cannot exceed ₹200/km"),
+});
+
+/* ------------------------------------------------------------------ */
 /*  Food Demands (NGO)                                                  */
 /* ------------------------------------------------------------------ */
 

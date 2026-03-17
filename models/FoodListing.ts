@@ -33,6 +33,12 @@ export interface IFoodListing extends Document {
   volunteerAssignedAt?: Date;
   pickedUpAt?: Date;
   deliveredAt?: Date;
+  /** Distance (km) between donor pickup and NGO drop-off, stored when volunteer accepts */
+  distanceKm?: number;
+  /** Calculated volunteer payout in INR */
+  payoutAmount?: number;
+  /** The NGO (claimedBy) responsible for this payout */
+  payoutNgoId?: Types.ObjectId;
   createdAt: Date;
 }
 
@@ -73,6 +79,9 @@ const FoodListingSchema = new Schema<IFoodListing>({
   volunteerAssignedAt: { type: Date, index: true },
   pickedUpAt: { type: Date },
   deliveredAt: { type: Date },
+  distanceKm: { type: Number, min: 0 },
+  payoutAmount: { type: Number, min: 0 },
+  payoutNgoId: { type: Schema.Types.ObjectId, ref: "User", index: true },
   createdAt: { type: Date, default: Date.now, index: true },
 });
 FoodListingSchema.index({ location: '2dsphere' });

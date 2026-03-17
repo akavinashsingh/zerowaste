@@ -15,6 +15,8 @@ export interface IUser extends Document {
     type: string;
     coordinates: [number, number];
   };
+  /** Volunteer only: per-km rate in INR (default 10) */
+  pricePerKm?: number;
   createdAt: Date;
 }
 
@@ -30,6 +32,7 @@ const UserSchema = new Schema<IUser>({
     type: { type: String, default: 'Point' },
     coordinates: { type: [Number] },
   },
+  pricePerKm: { type: Number, min: 1, max: 200, default: 10 },
   createdAt: { type: Date, default: Date.now },
 });
 

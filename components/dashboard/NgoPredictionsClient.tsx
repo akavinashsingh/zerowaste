@@ -204,7 +204,7 @@ export default function NgoPredictionsClient() {
                   {pieData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={200}>
                       <PieChart>
-                        <Pie data={pieData} dataKey="value" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11}>
+                        <Pie data={pieData} dataKey="value" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false} fontSize={11}>
                           {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                         </Pie>
                         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, fontFamily: "DM Sans" }} />

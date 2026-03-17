@@ -1,12 +1,12 @@
 
 import Header from "@/components/dashboard/Header";
-import StatCard from "@/components/dashboard/StatCard";
+import StatCard, { type StatCardProps } from "@/components/dashboard/StatCard";
 import RecentActivity from "@/components/dashboard/RecentActivity";
 import QuickLinks from "@/components/dashboard/QuickLinks";
 import OverviewChart from "@/components/dashboard/OverviewChart";
 import { DollarSign, Package, Users, Handshake } from "lucide-react";
 
-const stats = [
+const stats: StatCardProps[] = [
     { title: "Total Donations", value: "$12,450", change: "+12.5%", icon: <DollarSign className="h-5 w-5"/>, changeType: "increase" },
     { title: "Active Listings", value: "56", change: "+2.1%", icon: <Package className="h-5 w-5"/>, changeType: "increase" },
     { title: "New Partners", value: "4", change: "-5.3%", icon: <Handshake className="h-5 w-5"/>, changeType: "decrease" },

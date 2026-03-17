@@ -1,7 +1,7 @@
 
 import { ArrowUpRight } from "lucide-react";
 
-type StatCardProps = {
+export type StatCardProps = {
   title: string;
   value: string;
   change: string;

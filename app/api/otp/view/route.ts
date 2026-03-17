@@ -4,14 +4,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
 import OTP from "@/models/OTP";
-import FoodListing from "@/models/FoodListing";
 
 /**
  * GET /api/otp/view?listingId=xxx&type=pickup|delivery
  *
- * Returns the active OTP code for display to the authorized role:
- *   - pickup  → donor only
- *   - delivery → NGO only
+ * Returns the active OTP code for the calling user if they are the
+ * designated recipient (recipientId on the OTP document):
+ *   pickup   → donor
+ *   delivery → NGO
+ *
+ * Authorization is enforced via OTP.recipientId — no separate listing
+ * lookup is needed, which removes one DB round-trip and a class of IDOR.
  */
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -25,40 +28,41 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") as "pickup" | "delivery" | null;
 
   if (!listingId || (type !== "pickup" && type !== "delivery")) {
-    return NextResponse.json({ error: "listingId and type (pickup|delivery) are required." }, { status: 400 });
+    return NextResponse.json(
+      { error: "listingId and type (pickup|delivery) are required." },
+      { status: 400 },
+    );
   }
 
   await connectMongo();
 
-  const listing = await FoodListing.findById(listingId).lean();
-  if (!listing) {
-    return NextResponse.json({ error: "Listing not found." }, { status: 404 });
-  }
-
-  // Role-based authorization
-  const userId = session.user.id;
-  if (type === "pickup" && listing.donorId.toString() !== userId) {
-    return NextResponse.json({ error: "Only the donor can view the pickup OTP." }, { status: 403 });
-  }
-  if (type === "delivery" && listing.claimedBy?.toString() !== userId) {
-    return NextResponse.json({ error: "Only the receiving NGO can view the delivery OTP." }, { status: 403 });
-  }
-
-  const otp = await OTP.findOne({ listingId, type, verified: false }).lean();
+  const otp = await OTP.findOne({
+    listingId,
+    type,
+    isUsed: false,
+    expiresAt: { $gt: new Date() },
+  }).lean();
 
   if (!otp) {
-    return NextResponse.json({ code: null, message: "No active OTP." });
+    return NextResponse.json({ code: null, message: "No active OTP for this listing." });
   }
 
-  if (otp.expiresAt < new Date()) {
-    return NextResponse.json({ code: null, message: "OTP has expired." });
+  // Scope: only the designated recipient may read the code
+  if (otp.recipientId.toString() !== session.user.id) {
+    return NextResponse.json(
+      { error: "You are not authorized to view this OTP." },
+      { status: 403 },
+    );
   }
 
-  const minutesLeft = Math.ceil((otp.expiresAt.getTime() - Date.now()) / 60000);
+  const minutesLeft = Math.ceil((otp.expiresAt.getTime() - Date.now()) / 60_000);
 
   return NextResponse.json({
     code: otp.code,
-    expiresAt: otp.expiresAt,
+    type,
+    expiresAt: otp.expiresAt.toISOString(),
     minutesLeft,
+    attemptsUsed: otp.attempts,
+    attemptsRemaining: Math.max(0, 5 - otp.attempts),
   });
 }

@@ -9,6 +9,7 @@
 import mongoose, { Types } from "mongoose";
 
 import { connectMongo } from "@/lib/mongodb";
+import { createOTP } from "@/lib/otp";
 import { sendNotification } from "@/lib/notify";
 import { calcTaskDistanceKm, calcPayoutAmount, PAYOUT_CONFIG } from "@/lib/payout";
 import { getIO } from "@/lib/socket";
@@ -302,6 +303,9 @@ async function dispatchEvents({
     io.to(volunteer.id).emit("task_assigned", socketPayload);
     io.to(ngoId).emit("volunteer_confirmed", socketPayload);
   }
+
+  // Generate pickup OTP — donor will receive it via socket + notification
+  void createOTP(listingId, "pickup");
 
   // Persist in-app notifications
   await Promise.all([

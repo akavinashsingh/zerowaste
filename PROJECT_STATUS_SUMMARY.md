@@ -1,127 +1,86 @@
-# ZeroWaste Project Summary
+# ZeroWaste Project Status Summary
 
-## 1. Project Overview
-ZeroWaste is a role-based food rescue platform built with Next.js App Router, TypeScript, MongoDB, and Socket.IO.
+## 1. Product Snapshot
+ZeroWaste is a role-based food rescue platform built on Next.js App Router that connects donors, NGOs, volunteers, and admins in a single logistics workflow.
 
-The core goal is to connect:
-- Donors (restaurants/food providers) with surplus food
-- NGOs that can claim and distribute food
-- Volunteers who handle pickup and delivery logistics
-- Admins who monitor and manage the full system
+Current stage: functional MVP+/early production-ready baseline with live core flows (auth, listing lifecycle, geo matching, notifications, and admin operations).
 
-## 2. Current Tech Stack
+## 2. Implemented Stack
 - Frontend: Next.js 16, React 19, TypeScript
-- Backend/API: Next.js Route Handlers
-- Auth: NextAuth (Credentials + JWT sessions)
-- Database: MongoDB with Mongoose
-- Realtime: Socket.IO
-- Maps/Geo: Leaflet + GeoJSON coordinates + geospatial queries
-- Media Upload: Cloudinary
-- Charts/Analytics UI: Recharts
+- Backend: Next.js Route Handlers + custom Node server (`server.ts`) for Socket.IO
+- Auth: NextAuth credentials flow with JWT session metadata (role, location, profile fields)
+- Database: MongoDB + Mongoose models (`User`, `FoodListing`, `Notification`, `AuditLog`)
+- Realtime: Socket.IO room-based user notifications
+- Geo: Leaflet + GeoJSON coordinates + `$geoNear` queries
+- Media: Cloudinary upload endpoint integration
+- Validation: Zod utilities available (`lib/schemas.ts`), currently applied in selected routes
+- AI Insights: Groq-backed streaming recommendations for donor and NGO prediction dashboards
 
-## 3. What Has Been Achieved So Far
+## 3. Current Feature Coverage
 
-### A. Authentication and Access Control
-- Credentials-based registration and login are implemented.
-- Password hashing is handled with bcrypt.
-- JWT sessions include role and profile metadata.
-- Dashboard access is protected via middleware.
-- Role-aware routing redirects users to role-specific dashboards.
-- Admin-only API protection wrapper is implemented.
+### A. Authentication and Role Access
+- Registration, login, and password hashing are implemented.
+- Session-aware middleware protects dashboard and role routes.
+- `adminOnly` wrapper is used for protected admin endpoints.
 
-### B. Core Domain Models (Database)
-- User model supports roles: donor, ngo, volunteer, admin.
-- FoodListing model supports full lifecycle states:
-  - available
-  - claimed
-  - picked_up
-  - delivered
-  - expired
-- Notification model supports per-user notifications and read state.
-- Geospatial indexing is in place for location-aware matching.
+### B. Listing Lifecycle and Operations
+- Donors can create listings with food items, quantity, meal estimate, expiry, location, and images.
+- NGOs can browse and claim listings.
+- Volunteers can accept tasks and update status using guarded transitions (`claimed -> picked_up -> delivered`).
+- Status updates trigger notifications to relevant stakeholders.
 
-### C. Food Listing Workflow (End-to-End)
-- Donors can create listings with:
-  - food item details
-  - quantity and meal estimate
-  - pickup expiry time
-  - location/address
-  - images
-- Listing validation includes required fields and future expiry checks.
-- NGOs can claim available listings.
-- Volunteers can accept claimed tasks.
-- Volunteers can update status in valid sequence:
-  - claimed -> picked_up -> delivered
-- Donors/NGOs are notified on key status changes.
+### C. Geo and Matching
+- Radius-based listing discovery is supported via query params.
+- Nearby NGO matching exists for donor-side listing events.
+- Volunteer-facing task data includes distance calculations and map-friendly normalized coordinates.
 
-### D. Geo and Matching Features
-- Nearby NGO discovery endpoint is implemented.
-- Listings can be fetched using radius-based geo filters.
-- Volunteer task list includes distance-to-pickup and distance-to-drop calculations.
-- GeoJSON normalization helpers are used for client-safe responses.
+### D. Realtime Notifications
+- Notification records are persisted in MongoDB.
+- Users can fetch notifications, mark one as read, and mark all as read.
+- Socket.IO emits per-user realtime events when new notifications are generated.
 
-### E. Notification System
-- Notification creation utility is integrated with business events.
-- Users can:
-  - fetch latest notifications
-  - mark one notification as read
-  - mark all unread notifications as read
-- Notification-related realtime infrastructure is present via Socket.IO.
+### E. Admin Controls and Auditability
+- Admin dashboards include analytics, users, listings, moderation, and map views.
+- Admin APIs support user role/status updates and listing status/delete operations.
+- Admin action logging is implemented (`lib/audit.ts` + `app/api/admin/audit-logs/route.ts`).
+- Admin seeding endpoint exists with header-secret protection (`x-seed-secret`).
 
-### F. Admin Capabilities
-- Admin dashboard is implemented with data visualization and management tabs.
-- Admin stats endpoint provides:
-  - listing counts by state
-  - user counts by role
-  - delivered food totals
-  - 30-day trend series
-  - food type distribution
-- Admin user management supports:
-  - filtering/searching/pagination
-  - role updates
-  - activate/deactivate flow
-- Admin listing management supports:
-  - filtering/searching/pagination
-  - status updates
-  - deleting listings
-  - active listings view for map usage
+### F. AI/Prediction Features
+- Donor prediction endpoint: calculates 90-day donor performance metrics and streams Groq suggestions.
+- NGO prediction endpoint: analyzes nearby 30-day supply patterns and streams actionable guidance.
+- Both endpoints return useful fallback payloads if AI generation is unavailable.
 
-### G. Public Metrics and Storytelling
-- Public stats endpoint is available for landing/marketing numbers.
-- Hero/public metrics include meals saved, waste prevented, volunteers, donors, NGOs, and cities covered.
+### G. User Account Management
+- Profile fetch and update endpoint is live.
+- Password change endpoint is live and uses schema validation.
 
-### H. Automation and Operations
-- Cron endpoint for automatic expiry of overdue available listings is implemented.
-- Local test account seeding is available.
-- Reset helper script for test bookings exists.
-- Custom Node server setup supports Socket.IO and Next app handling.
+### H. Public Metrics and Automation
+- Public stats endpoint exists for landing-page storytelling metrics.
+- Cron endpoint exists for automatic expiry of overdue listings.
 
-### I. UI and User Dashboards
-- Dedicated dashboard pages/clients exist for:
-  - donor
-  - ngo
-  - volunteer
-  - admin
-- Donor dashboard includes listing creation UX (multi-step flow), status cards, and listing history.
-- Admin UI includes analytics charts and live map integration.
-- Shared component library includes cards, buttons, modals, badges, skeletons, and navigation modules.
+## 4. Maturity Assessment
+Core business workflow is implemented end-to-end and usable:
+- Auth + role segregation: complete
+- Food listing and rescue workflow: complete
+- Admin observability and control panel: complete
+- Realtime notifications: complete
+- Geo-aware discovery/matching: complete
+- AI advisory layer: complete (with fallback behavior)
 
-## 4. Current Project Maturity (Snapshot)
-The project is beyond initial scaffolding and already in functional product stage for core workflows:
-- User onboarding and role-based auth: Done
-- Listing lifecycle and logistics flow: Done
-- Geo matching and distance logic: Done
-- Notifications and event-driven updates: Done
-- Admin observability and controls: Done
+## 5. Gaps and Risks (Current)
+- Automated tests are not present yet (no unit/integration/API test suite).
+- Input validation is inconsistent: Zod exists but is not yet applied across all mutating routes.
+- `README.md` is still template-level and does not document project setup/architecture.
+- Socket join flow currently trusts client-provided user ID room join event; stronger server-side binding is recommended.
+- Operational hardening (monitoring, structured logging, deploy runbooks) is still pending.
 
-## 5. Suggested Next Milestones
-- Replace placeholder README with product-specific setup and architecture docs.
-- Add automated testing (unit + integration + API route tests).
-- Add audit logs for admin actions.
-- Add stronger input validation schemas (for all route handlers).
-- Harden cron/auth controls for production deployment.
-- Add performance monitoring and error tracking.
-- Improve API documentation (OpenAPI or endpoint reference).
+## 6. Recommended Next Milestones
+1. Standardize request validation using Zod for all create/update/patch/delete route handlers.
+2. Add automated test coverage for critical flows (auth, listing lifecycle, claim/assign/status transitions, admin APIs).
+3. Harden realtime auth by binding socket rooms to verified session identity rather than raw client input.
+4. Replace `README.md` with project-specific setup, environment variables, architecture, and API reference.
+5. Add production observability: request/error logging, tracing, and alerting hooks.
+6. Add CI checks (lint, typecheck, tests) and basic release/deploy checklist.
 
 ---
 Prepared on: 2026-03-17

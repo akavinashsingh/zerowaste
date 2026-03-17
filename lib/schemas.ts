@@ -67,6 +67,25 @@ export const adminUpdateListingStatusSchema = z.object({
 });
 
 /* ------------------------------------------------------------------ */
+/*  Food Demands (NGO)                                                  */
+/* ------------------------------------------------------------------ */
+
+export const createDemandSchema = z.object({
+  mealsRequired: z.number().int().min(1, "At least 1 meal is required"),
+  foodType: z.string().trim().optional(),
+  urgency: z.enum(["low", "medium", "high"]).default("medium"),
+  location: z.object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    address: z.string().min(1, "Address is required"),
+  }),
+});
+
+export const updateDemandStatusSchema = z.object({
+  status: z.enum(["open", "fulfilled", "expired"]),
+});
+
+/* ------------------------------------------------------------------ */
 /*  Admin User Management                                               */
 /* ------------------------------------------------------------------ */
 

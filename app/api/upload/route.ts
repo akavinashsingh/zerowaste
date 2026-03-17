@@ -12,6 +12,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "An image file is required." }, { status: 400 });
   }
 
+  const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  if (!allowedTypes.includes(image.type)) {
+    return NextResponse.json({ error: "Only JPEG, PNG, WebP, and GIF images are allowed." }, { status: 400 });
+  }
+
   const bytes = Buffer.from(await image.arrayBuffer());
   const dataUri = `data:${image.type};base64,${bytes.toString("base64")}`;
 

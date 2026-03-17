@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { adminOnly } from "@/lib/adminOnly";
 import { connectMongo } from "@/lib/mongodb";
+import { logAdminAction } from "@/lib/audit";
 import User from "@/models/User";
 
 const allowedRoles = new Set(["donor", "ngo", "volunteer", "admin"] as const);
@@ -10,7 +11,7 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export const PATCH = adminOnly(async (request: Request, { params }: RouteContext) => {
+export const PATCH = adminOnly(async (request: Request, { params }: RouteContext, session) => {
   const { id } = await params;
   const body = (await request.json()) as { role?: string; isActive?: boolean };
 
@@ -33,6 +34,8 @@ export const PATCH = adminOnly(async (request: Request, { params }: RouteContext
 
   await connectMongo();
 
+  const before = await User.findById(id).select("name role isActive").lean();
+
   const user = await User.findByIdAndUpdate(id, updates, {
     new: true,
     runValidators: true,
@@ -43,6 +46,17 @@ export const PATCH = adminOnly(async (request: Request, { params }: RouteContext
   if (!user) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
+
+  const action = updates.role !== undefined ? "user_role_change" : updates.isActive ? "user_activate" : "user_deactivate";
+  void logAdminAction({
+    adminId: session.user.id,
+    adminName: session.user.name ?? "Admin",
+    action,
+    targetId: id,
+    targetType: "user",
+    targetName: user.name,
+    details: { before: { role: (before as {role?: string})?.role, isActive: (before as {isActive?: boolean})?.isActive }, after: updates },
+  });
 
   return NextResponse.json({
     user: {
@@ -58,7 +72,7 @@ export const PATCH = adminOnly(async (request: Request, { params }: RouteContext
   });
 });
 
-export const DELETE = adminOnly(async (_: Request, { params }: RouteContext) => {
+export const DELETE = adminOnly(async (_: Request, { params }: RouteContext, session) => {
   const { id } = await params;
 
   await connectMongo();
@@ -74,6 +88,15 @@ export const DELETE = adminOnly(async (_: Request, { params }: RouteContext) => 
   if (!user) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
+
+  void logAdminAction({
+    adminId: session.user.id,
+    adminName: session.user.name ?? "Admin",
+    action: "user_deactivate",
+    targetId: id,
+    targetType: "user",
+    targetName: user.name,
+  });
 
   return NextResponse.json({
     message: "User deactivated successfully.",

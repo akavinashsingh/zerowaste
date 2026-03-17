@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { adminOnly } from "@/lib/adminOnly";
 import { connectMongo } from "@/lib/mongodb";
+import { logAdminAction } from "@/lib/audit";
 import FoodListing from "@/models/FoodListing";
 
 const allowedStatuses = new Set(["available", "claimed", "picked_up", "delivered", "expired"] as const);
@@ -17,7 +18,7 @@ function normalizeLocation(raw: RawLocation | null | undefined) {
   return { lat: raw.coordinates[1] ?? 0, lng: raw.coordinates[0] ?? 0, address: raw.address ?? "" };
 }
 
-export const PATCH = adminOnly(async (request: Request, { params }: RouteContext) => {
+export const PATCH = adminOnly(async (request: Request, { params }: RouteContext, session) => {
   const { id } = await params;
   const body = (await request.json()) as { status?: string };
 
@@ -67,10 +68,19 @@ export const PATCH = adminOnly(async (request: Request, { params }: RouteContext
     location: normalizeLocation(listing.location as RawLocation | undefined),
   };
 
+  void logAdminAction({
+    adminId: session.user.id,
+    adminName: session.user.name ?? "Admin",
+    action: "listing_status_change",
+    targetId: id,
+    targetType: "listing",
+    details: { newStatus: body.status },
+  });
+
   return NextResponse.json({ listing: normalizedListing });
 });
 
-export const DELETE = adminOnly(async (_: Request, { params }: RouteContext) => {
+export const DELETE = adminOnly(async (_: Request, { params }: RouteContext, session) => {
   const { id } = await params;
 
   await connectMongo();
@@ -79,6 +89,15 @@ export const DELETE = adminOnly(async (_: Request, { params }: RouteContext) => 
   if (!listing) {
     return NextResponse.json({ error: "Listing not found." }, { status: 404 });
   }
+
+  void logAdminAction({
+    adminId: session.user.id,
+    adminName: session.user.name ?? "Admin",
+    action: "listing_delete",
+    targetId: id,
+    targetType: "listing",
+    targetName: (listing as { donorName?: string }).donorName,
+  });
 
   return NextResponse.json({ message: "Listing deleted successfully." });
 });

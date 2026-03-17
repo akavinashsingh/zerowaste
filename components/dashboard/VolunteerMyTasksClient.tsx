@@ -243,9 +243,12 @@ export default function VolunteerMyTasksClient({ sessionUser }: { sessionUser: S
             </div>
             <div className="vm-modal-body">
               <RouteMap
-                pickupLocation={routeTask.location}
-                dropoffLocation={routeTask.claimedBy?.location ? { lat: routeTask.claimedBy.location.lat, lng: routeTask.claimedBy.location.lng, address: routeTask.claimedBy.address } : null}
-                volunteerLocation={sessionUser.location ?? null}
+                pickup={{ lat: routeTask.location.lat, lng: routeTask.location.lng, label: routeTask.donorName }}
+                dropoff={routeTask.claimedBy?.location
+                  ? { lat: routeTask.claimedBy.location.lat, lng: routeTask.claimedBy.location.lng, label: routeTask.claimedBy.name }
+                  : { lat: routeTask.location.lat, lng: routeTask.location.lng, label: "Drop-off pending" }
+                }
+                volunteer={sessionUser.location ?? undefined}
               />
             </div>
           </div>

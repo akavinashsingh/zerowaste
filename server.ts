@@ -7,11 +7,16 @@ import { Server } from "socket.io";
 import { setIO } from "./lib/socket";
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = "localhost";
+// Render (and most PaaS) require binding to 0.0.0.0, not localhost
+const hostname = dev ? "localhost" : "0.0.0.0";
 const port = parseInt(process.env.PORT ?? "3000", 10);
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
+
+// Lock Socket.IO CORS to the deployment origin in production.
+// NEXTAUTH_URL is always the canonical public URL of the app.
+const allowedOrigin = process.env.NEXTAUTH_URL ?? (dev ? "http://localhost:3000" : undefined);
 
 void app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
@@ -21,7 +26,7 @@ void app.prepare().then(() => {
 
   const io = new Server(httpServer, {
     cors: {
-      origin: "*",
+      origin: allowedOrigin ?? false,
       methods: ["GET", "POST"],
     },
   });

@@ -1,0 +1,107 @@
+# Render Infrastructure as Code
+# Docs: https://render.com/docs/infrastructure-as-code
+#
+# Usage:
+#   1. Push this file to the root of your GitHub repo.
+#   2. In the Render dashboard → New → Blueprint → select your repo.
+#   3. Set every  sync: false  env var in the Render dashboard before the
+#      first deploy (see .env.example for descriptions).
+#   4. After the first deploy, copy the service URL
+#      (https://<name>.onrender.com) and set it as NEXTAUTH_URL.
+
+services:
+  # ── Web service ─────────────────────────────────────────────────────────────
+  - type: web
+    name: zerowaste
+    env: node
+    # "starter" keeps the service always-on (required for Socket.IO).
+    # The free plan spins down after 15 min of inactivity which breaks
+    # persistent socket connections.
+    plan: starter
+    region: singapore   # change to the region closest to your users
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true   # redeploy automatically on every push to the branch
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # ── Next.js / Auth ─────────────────────────────────────────────────────
+      # Set NEXTAUTH_URL to your Render URL after the first deploy, e.g.
+      # https://zerowaste.onrender.com
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: NEXTAUTH_SECRET
+        generateValue: true   # Render generates a secure random value
+
+      # ── Database ───────────────────────────────────────────────────────────
+      # MongoDB Atlas connection string. Whitelist 0.0.0.0/0 in Atlas
+      # Network Access (Render IPs are dynamic).
+      - key: MONGODB_URI
+        sync: false
+
+      # ── Cloudinary ─────────────────────────────────────────────────────────
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      # ── Groq (AI predictions) ──────────────────────────────────────────────
+      - key: GROQ_API_KEY
+        sync: false
+
+      # ── Internal secrets ───────────────────────────────────────────────────
+      - key: CRON_SECRET
+        generateValue: true
+      - key: SEED_SECRET
+        generateValue: true
+
+  # ── Cron job: expire stale listings every hour ──────────────────────────────
+  - type: cron
+    name: zerowaste-expire-listings
+    env: node
+    schedule: "0 * * * *"   # top of every hour
+    # No build step needed — this job only fires an HTTP call.
+    buildCommand: "true"
+    # Uses APP_HOST (injected from the web service) so the URL is always
+    # correct even if the service is renamed or moved.
+    startCommand: >-
+      node -e "
+        const https = require('https');
+        const req = https.request(
+          {
+            hostname: process.env.APP_HOST,
+            path: '/api/cron/expire-listings',
+            method: 'GET',
+            headers: { 'x-cron-secret': process.env.CRON_SECRET }
+          },
+          res => {
+            let body = '';
+            res.on('data', c => body += c);
+            res.on('end', () => {
+              console.log('expire-listings status=' + res.statusCode, body);
+              if (res.statusCode !== 200) process.exit(1);
+            });
+          }
+        );
+        req.on('error', e => { console.error(e); process.exit(1); });
+        req.end();
+      "
+
+    envVars:
+      # Pull the hostname and secret from the web service so there is only
+      # one place to change them.
+      - key: APP_HOST
+        fromService:
+          name: zerowaste
+          type: web
+          property: host
+      - key: CRON_SECRET
+        fromService:
+          name: zerowaste
+          type: web
+          envVarKey: CRON_SECRET

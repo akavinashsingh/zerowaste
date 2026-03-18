@@ -459,15 +459,29 @@ export default function RegisterPage() {
 
         @media (max-width: 1100px) {
           .reg-right { display: none; }
-          .reg-left { padding: 2rem 2rem; }
-          .reg-form-wrap { max-width: 100%; }
+          .reg-left { padding: 2.5rem 3rem; }
+          .reg-form-wrap { max-width: 520px; margin: 0 auto; width: 100%; }
+        }
+        @media (max-width: 768px) {
+          .reg-left { padding: 2rem 1.75rem; }
+          .reg-heading { font-size: 2rem; }
+          .reg-roles { grid-template-columns: 1fr; gap: 0.625rem; }
+          .reg-role-btn {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.875rem 1rem;
+          }
+          .reg-role-icon { font-size: 1.75rem; margin-bottom: 0; flex-shrink: 0; }
+          .reg-role-name { margin-bottom: 1px; }
         }
         @media (max-width: 540px) {
-          .reg-roles { grid-template-columns: 1fr; }
+          .reg-left { padding: 1.75rem 1.25rem; }
+          .reg-logo { margin-bottom: 1.75rem; }
+          .reg-heading { font-size: 1.8rem; }
           .reg-row { grid-template-columns: 1fr; }
           .reg-loc-row { grid-template-columns: 1fr 1fr; }
           .reg-loc-row .reg-loc-btn { grid-column: 1 / -1; }
-          .reg-heading { font-size: 1.9rem; }
         }
       `}</style>
 

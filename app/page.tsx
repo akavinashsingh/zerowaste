@@ -854,7 +854,57 @@ export default async function Home() {
           color: rgba(255,255,255,0.3);
         }
 
+        /* ── Mobile hamburger ─────────────────────────────────────────── */
+        .ff-mob-chk { display: none; }
+        .ff-hamburger {
+          display: none;
+          flex-direction: column;
+          gap: 5px;
+          cursor: pointer;
+          padding: 8px;
+          border-radius: 8px;
+          background: transparent;
+          border: none;
+          margin-left: 4px;
+        }
+        .ff-hamburger span {
+          display: block;
+          width: 22px;
+          height: 2px;
+          background: var(--ff-stone);
+          border-radius: 2px;
+          transition: transform 0.3s, opacity 0.3s;
+        }
+        .ff-mob-menu {
+          display: none;
+          padding: 0.5rem 1.5rem 1.25rem;
+          background: rgba(250,248,244,0.98);
+          backdrop-filter: blur(20px);
+          border-top: 1px solid var(--ff-border);
+        }
+        .ff-mob-links { list-style: none; padding: 0; margin: 0 0 1rem; }
+        .ff-mob-links li a {
+          display: block;
+          padding: 0.875rem 0;
+          font-size: 0.975rem;
+          font-weight: 500;
+          color: var(--ff-stone);
+          text-decoration: none;
+          border-bottom: 1px solid var(--ff-border);
+          transition: color 0.2s;
+        }
+        .ff-mob-links li a:hover { color: var(--ff-leaf); }
+        .ff-mob-links li:last-child a { border-bottom: none; }
+        .ff-mob-cta { display: flex; gap: 0.75rem; }
+        .ff-mob-cta a { flex: 1; text-align: center; }
+
         @media (max-width: 900px) {
+          .ff-hamburger { display: flex; }
+          .ff-nav-actions .btn-ghost { display: none; }
+          .ff-mob-chk:checked ~ .ff-nav-inner .ff-hamburger span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+          .ff-mob-chk:checked ~ .ff-nav-inner .ff-hamburger span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+          .ff-mob-chk:checked ~ .ff-nav-inner .ff-hamburger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+          .ff-mob-chk:checked ~ .ff-mob-menu { display: block; }
           .ff-hero-inner { grid-template-columns: 1fr; gap: 3rem; }
           .ff-hero-visual { height: 320px; }
           .ff-hero-bg-circle { width: 260px; height: 260px; }
@@ -871,15 +921,25 @@ export default async function Home() {
           .ff-cta-banner { margin: 0 1rem; padding: 3rem 1.5rem; border-radius: 20px; }
         }
         @media (max-width: 600px) {
-          .ff-hero { padding: 4rem 1.25rem 4rem; }
-          .ff-section { padding: 4rem 1.25rem; }
-          .ff-mini-stats { gap: 1.5rem; }
+          .ff-hero { padding: 4rem 1.25rem 3rem; }
+          .ff-section { padding: 3.5rem 1.25rem; }
+          .ff-nav-inner { padding: 0 1.25rem; }
+          .ff-hero-visual { display: none; }
+          .ff-hero-inner { gap: 0; }
+          .ff-cta-row { flex-direction: column; }
+          .btn-hero-primary, .btn-hero-secondary { justify-content: center; width: 100%; }
+          .ff-mini-stats { flex-wrap: wrap; gap: 1rem 2rem; }
           .ff-impact-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+          .ff-footer-inner { flex-direction: column; align-items: flex-start; gap: 1rem; }
+          .ff-footer-links { flex-wrap: wrap; gap: 0.75rem 1.25rem; }
+          .ff-cta-banner { margin: 0 0.75rem; border-radius: 16px; padding: 2.5rem 1.25rem; }
+          .ff-mob-menu { padding: 0.5rem 1.25rem 1.25rem; }
         }
       `}</style>
 
       <div className="ff-page">
         <nav className="ff-nav">
+          <input type="checkbox" id="ff-mob" className="ff-mob-chk" />
           <div className="ff-nav-inner">
             <Link href="/" className="ff-logo">
               <div className="ff-logo-mark">🌿</div>
@@ -891,6 +951,20 @@ export default async function Home() {
               <li><a href="#join">Join Us</a></li>
             </ul>
             <div className="ff-nav-actions">
+              <Link href="/login" className="btn-ghost">Login</Link>
+              <Link href="/register" className="btn-primary">Get Started →</Link>
+              <label htmlFor="ff-mob" className="ff-hamburger" aria-label="Toggle menu">
+                <span /><span /><span />
+              </label>
+            </div>
+          </div>
+          <div className="ff-mob-menu">
+            <ul className="ff-mob-links">
+              <li><a href="#how-it-works">How It Works</a></li>
+              <li><a href="#impact">Impact</a></li>
+              <li><a href="#join">Join Us</a></li>
+            </ul>
+            <div className="ff-mob-cta">
               <Link href="/login" className="btn-ghost">Login</Link>
               <Link href="/register" className="btn-primary">Get Started →</Link>
             </div>

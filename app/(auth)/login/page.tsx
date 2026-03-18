@@ -359,18 +359,68 @@ export default function LoginPage() {
           font-weight: 500;
         }
 
+        .auth-mobile-top { display: none; }
+
         @media (max-width: 1024px) {
+          .auth-page { flex-direction: column; }
           .auth-right { display: none; }
-          .auth-left { padding: 2.5rem 2rem; }
-          .auth-form-wrap { max-width: 100%; }
+          .auth-left { padding: 2.5rem 2.5rem; flex: 1; justify-content: flex-start; padding-top: 3rem; }
+          .auth-form-wrap { max-width: 480px; margin: 0 auto; width: 100%; }
+          .auth-mobile-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #1a5c38;
+            padding: 1rem 2.5rem;
+            flex-shrink: 0;
+          }
+          .auth-mobile-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Fraunces', serif;
+            font-size: 1.15rem;
+            font-weight: 900;
+            color: white;
+            text-decoration: none;
+            letter-spacing: -0.02em;
+          }
+          .auth-mobile-logo-mark {
+            width: 28px; height: 28px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 7px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.9rem;
+          }
+          .auth-mobile-tagline {
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.7);
+            font-style: italic;
+            font-family: 'Fraunces', serif;
+          }
+          .auth-logo { display: none; }
+        }
+        @media (max-width: 600px) {
+          .auth-mobile-top { padding: 0.875rem 1.25rem; }
+          .auth-left { padding: 2rem 1.25rem; }
+          .auth-heading { font-size: 2.2rem; }
         }
         @media (max-width: 480px) {
-          .auth-heading { font-size: 2rem; }
-          .auth-left { padding: 2rem 1.25rem; }
+          .auth-heading { font-size: 1.9rem; }
+          .auth-mobile-tagline { display: none; }
         }
       `}</style>
 
       <div className="auth-page">
+        {/* Mobile top strip — replaces logo on small screens */}
+        <div className="auth-mobile-top">
+          <Link href="/" className="auth-mobile-logo">
+            <div className="auth-mobile-logo-mark">🌿</div>
+            ZeroWaste
+          </Link>
+          <span className="auth-mobile-tagline">Every meal matters.</span>
+        </div>
+
         {/* LEFT */}
         <section className="auth-left">
           <Link href="/" className="auth-logo">

@@ -883,7 +883,7 @@ export default async function Home() {
           <div className="ff-nav-inner">
             <Link href="/" className="ff-logo">
               <div className="ff-logo-mark">🌿</div>
-              FeedForward
+              ZeroWaste
             </Link>
             <ul className="ff-nav-links">
               <li><a href="#how-it-works">How It Works</a></li>
@@ -1014,7 +1014,7 @@ export default async function Home() {
 
         <section className="ff-trust">
           <div className="ff-trust-inner">
-            <div className="ff-trust-label">Why FeedForward</div>
+            <div className="ff-trust-label">Why ZeroWaste</div>
             <div className="ff-trust-grid">
               {[
                 { icon: '⚡', bg: '#fef9c3', title: '60-Second Listing', desc: 'Post surplus food in under a minute with smart defaults and clear pickup windows.' },
@@ -1180,7 +1180,7 @@ export default async function Home() {
           <p>Join thousands of donors, NGOs, and volunteers already saving food and feeding communities across India.</p>
           <div className="ff-cta-row">
             <Link href="/register" className="btn-cta-white">
-              Join FeedForward — It&apos;s Free
+              Join ZeroWaste — It&apos;s Free
             </Link>
             <Link href="/login" className="btn-cta-outline">
               Sign In
@@ -1192,7 +1192,7 @@ export default async function Home() {
           <div className="ff-footer-inner">
             <Link href="/" className="ff-logo ff-footer-logo">
               <div className="ff-logo-mark">🌿</div>
-              FeedForward
+              ZeroWaste
             </Link>
             <ul className="ff-footer-links">
               <li><a href="#">About</a></li>
@@ -1201,7 +1201,7 @@ export default async function Home() {
             </ul>
           </div>
           <div className="ff-footer-copy">
-            Built for good 🌱 · © {CURRENT_YEAR} FeedForward. All rights reserved.
+            Built for good 🌱 · © {CURRENT_YEAR} ZeroWaste. All rights reserved.
           </div>
         </footer>
 

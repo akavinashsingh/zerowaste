@@ -17,7 +17,7 @@ const sora = Sora({
 });
 
 export const metadata: Metadata = {
-  title: "FeedForward — Turn Surplus Into Support",
+  title: "ZeroWaste — Turn Surplus Into Support",
   description:
     "Connect restaurants with NGOs. Reduce food waste. Feed communities.",
 };

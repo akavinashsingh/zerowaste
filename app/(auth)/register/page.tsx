@@ -476,7 +476,7 @@ export default function RegisterPage() {
         <section className="reg-left">
           <Link href="/" className="reg-logo">
             <div className="reg-logo-mark">🌿</div>
-            FeedForward
+            ZeroWaste
           </Link>
 
           <div className="reg-form-wrap">
@@ -598,7 +598,7 @@ export default function RegisterPage() {
           <div className="reg-right-top">
             <Link href="/" className="reg-right-logo">
               <div className="reg-right-logo-mark">🌿</div>
-              FeedForward
+              ZeroWaste
             </Link>
 
             <h2 className="reg-right-heading">
@@ -629,7 +629,7 @@ export default function RegisterPage() {
             <div className="reg-trust-badge">
               <div className="reg-trust-icon">🌱</div>
               <div className="reg-trust-text">
-                <strong>Free forever.</strong> No fees, no commissions. FeedForward is built for communities, not profit.
+                <strong>Free forever.</strong> No fees, no commissions. ZeroWaste is built for communities, not profit.
               </div>
             </div>
           </div>

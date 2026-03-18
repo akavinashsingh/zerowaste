@@ -136,7 +136,7 @@ export default function Sidebar({ role, userName, userEmail, notificationCount =
       <div className="sb-logo-wrap">
         <Link href="/" className="sb-logo">
           <div className="sb-logo-mark">🌿</div>
-          <span className="sb-logo-text">FeedForward</span>
+          <span className="sb-logo-text">ZeroWaste</span>
         </Link>
       </div>
 

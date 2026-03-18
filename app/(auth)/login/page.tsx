@@ -375,7 +375,7 @@ export default function LoginPage() {
         <section className="auth-left">
           <Link href="/" className="auth-logo">
             <div className="auth-logo-mark">🌿</div>
-            FeedForward
+            ZeroWaste
           </Link>
 
           <div className="auth-form-wrap">
@@ -443,7 +443,7 @@ export default function LoginPage() {
         <aside className="auth-right">
           <Link href="/" className="auth-right-logo">
             <div className="auth-right-logo-mark">🌿</div>
-            FeedForward
+            ZeroWaste
           </Link>
 
           <div className="auth-stats-stack">
@@ -465,7 +465,7 @@ export default function LoginPage() {
             <p className="auth-quote-text">
               Every meal matters.<br />Every volunteer counts.
             </p>
-            <div className="auth-quote-author">— The FeedForward Community</div>
+            <div className="auth-quote-author">— The ZeroWaste Community</div>
           </div>
         </aside>
       </div>

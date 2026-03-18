@@ -226,7 +226,7 @@ export default function DonorPredictionsClient() {
                 <div className="dp-ai-icon"><Sparkles size={18} /></div>
                 <div>
                   <div className="dp-ai-title">AI Insights</div>
-                  <div className="dp-ai-sub">Powered by Groq · llama3-8b-8192</div>
+                  <div className="dp-ai-sub">Powered by Groq · llama-3.1-8b-instant</div>
                 </div>
                 {loading && <BarChart2 size={16} style={{ color: "#1a5c38", marginLeft: "auto", animation: "spin 2s linear infinite" }} />}
               </div>

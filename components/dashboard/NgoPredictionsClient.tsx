@@ -224,7 +224,7 @@ export default function NgoPredictionsClient() {
                 <div className="np-ai-icon"><Sparkles size={18} /></div>
                 <div>
                   <div className="np-ai-title">AI Surplus Insights</div>
-                  <div className="np-ai-sub">Powered by Groq · llama3-8b-8192</div>
+                  <div className="np-ai-sub">Powered by Groq · llama-3.1-8b-instant</div>
                 </div>
                 {loading && <BarChart2 size={16} style={{ color: "#1e40af", marginLeft: "auto", animation: "spin 2s linear infinite" }} />}
               </div>

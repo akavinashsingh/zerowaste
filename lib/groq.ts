@@ -13,4 +13,4 @@ export function getGroq(): Groq {
   return groqClient;
 }
 
-export const GROQ_MODEL = "llama3-8b-8192";
+export const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.1-8b-instant";

@@ -370,7 +370,7 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
         </section>
       </div>
 
-      {routeTask && routeTask.claimedBy?.location ? (
+      {routeTask ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-4xl rounded-3xl bg-white p-6">
             <div className="mb-4 flex items-start justify-between gap-3">
@@ -389,15 +389,23 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
               </button>
             </div>
 
-            <RouteMap
-              pickup={{ lat: routeTask.location.lat, lng: routeTask.location.lng, label: `${routeTask.donorName} (Pickup)` }}
-              dropoff={{
-                lat: routeTask.claimedBy.location.lat,
-                lng: routeTask.claimedBy.location.lng,
-                label: `${routeTask.claimedBy.name} (Drop-off)`,
-              }}
-              volunteer={volunteerLocation}
-            />
+            {routeTask.claimedBy?.location ? (
+              <RouteMap
+                pickup={{ lat: routeTask.location.lat, lng: routeTask.location.lng, label: `${routeTask.donorName} (Pickup)` }}
+                dropoff={{
+                  lat: routeTask.claimedBy.location.lat,
+                  lng: routeTask.claimedBy.location.lng,
+                  label: `${routeTask.claimedBy.name} (Drop-off)`,
+                }}
+                volunteer={volunteerLocation}
+              />
+            ) : (
+              <div className="rounded-2xl border border-dashed border-[color:var(--border)] bg-stone-50 px-6 py-10 text-center text-sm text-[color:var(--muted)]">
+                <p className="font-semibold text-[color:var(--foreground)]">Pickup location only</p>
+                <p className="mt-1">{routeTask.location.address}</p>
+                <p className="mt-2">NGO drop-off coordinates not set — ask the NGO to update their profile.</p>
+              </div>
+            )}
           </div>
         </div>
       ) : null}
@@ -452,9 +460,8 @@ function ActiveTaskCard({
 
       <button
         type="button"
-        disabled={!task.claimedBy?.location}
         onClick={() => onViewRoute(task)}
-        className="mt-4 w-full rounded-full border border-[color:var(--border)] bg-white px-4 py-2.5 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-4 w-full rounded-full border border-[color:var(--border)] bg-white px-4 py-2.5 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-stone-50"
       >
         View Route
       </button>

@@ -71,6 +71,7 @@ function getNav(role: Role): NavGroup[] {
           { label: "Dashboard", href: base, icon: <LayoutDashboard size={17} /> },
           { label: "Available Tasks", href: `${base}/tasks`, icon: <Truck size={17} /> },
           { label: "My Tasks", href: `${base}/my-tasks`, icon: <HandHeart size={17} /> },
+          { label: "Earnings", href: `${base}/earnings`, icon: <BarChart3 size={17} /> },
         ],
       },
       {

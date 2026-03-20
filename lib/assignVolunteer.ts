@@ -17,6 +17,12 @@ import FoodListing from "@/models/FoodListing";
 import User from "@/models/User";
 import VolunteerTask from "@/models/VolunteerTask";
 
+// ── Internal abort signals (never leak outside this module) ───────────────────
+class ListingUnavailableError extends Error {
+  readonly code = "LISTING_UNAVAILABLE" as const;
+}
+class VolunteerBusyError extends Error {}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 /** Search radius when looking for volunteers near the pickup point */
@@ -150,22 +156,19 @@ export async function autoAssignVolunteer(
   for (const candidate of candidates) {
     const mongoSession = await mongoose.startSession();
     let result: AssignmentResult | null = null;
+    let volunteerWasBusy = false;
 
     try {
       await mongoSession.withTransaction(async () => {
         // Re-check listing inside transaction to prevent race condition
         const freshListing = await FoodListing.findById(listingId).session(mongoSession);
         if (!freshListing || freshListing.status !== "available") {
-          // Another request claimed it — abort this transaction
-          await mongoSession.abortTransaction();
-          return;
+          throw new ListingUnavailableError("Listing is no longer available");
         }
 
         // Check volunteer availability inside transaction
         if (await isVolunteerBusy(candidate._id, mongoSession)) {
-          // This candidate is busy — abort and try the next one
-          await mongoSession.abortTransaction();
-          return;
+          throw new VolunteerBusyError("Volunteer is busy");
         }
 
         // Calculate route distance (pickup → NGO) and payout
@@ -221,38 +224,37 @@ export async function autoAssignVolunteer(
           },
         };
       });
-
-      if (result) {
-        // Transaction committed — fire notifications and socket events
-        await mongoSession.endSession();
-        void dispatchEvents({
-          result,
-          donorId: listing.donorId.toString(),
-          ngoId,
-          ngoName,
-          listingId,
-        });
-        return { ok: true, data: result };
-      }
-
-      // result is null: listing was already taken or volunteer was busy
-      await mongoSession.endSession();
-
-      // If the listing was snatched by someone else, stop trying
-      const recheck = await FoodListing.findById(listingId).select("status").lean();
-      if (recheck?.status !== "available") {
-        return {
-          ok: false,
-          error: { code: "LISTING_UNAVAILABLE", message: "This listing was just claimed by another NGO." },
-        };
-      }
-
-      // Otherwise this volunteer was busy — continue to next candidate
     } catch (err) {
       await mongoSession.endSession();
-      // Re-throw unexpected errors; loop will not continue
-      throw err;
+      if (err instanceof ListingUnavailableError) {
+        return { ok: false, error: { code: "LISTING_UNAVAILABLE", message: "This listing was just claimed by another NGO." } };
+      }
+      if (err instanceof VolunteerBusyError) {
+        volunteerWasBusy = true;
+      } else {
+        throw err; // unexpected — propagate
+      }
     }
+
+    if (result) {
+      await mongoSession.endSession();
+      void dispatchEvents({
+        result,
+        donorId: listing.donorId.toString(),
+        ngoId,
+        ngoName,
+        listingId,
+      });
+      return { ok: true, data: result };
+    }
+
+    if (!volunteerWasBusy) {
+      // Session ended in success path above, but result was null — listing was snatched
+      await mongoSession.endSession();
+      return { ok: false, error: { code: "LISTING_UNAVAILABLE", message: "This listing was just claimed by another NGO." } };
+    }
+
+    // Volunteer was busy — session already ended in catch, try the next candidate
   }
 
   // Exhausted all candidates without a successful assignment

@@ -78,7 +78,7 @@ export default function NgoPredictionsClient() {
     }
   }
 
-  const pieData = stats
+  const pieData = stats?.foodTypeCounts
     ? Object.entries(stats.foodTypeCounts).map(([name, value]) => ({
         name: name.charAt(0).toUpperCase() + name.slice(1),
         value,
@@ -174,7 +174,7 @@ export default function NgoPredictionsClient() {
                   { icon: <TrendingUp size={17} />, iconBg: "#e8f5ee", iconColor: "#1a5c38", val: `${stats.claimRate}%`, lbl: "Claim Rate" },
                   { icon: <Package size={17} />, iconBg: "#dbeafe", iconColor: "#1e40af", val: stats.total, lbl: "Total Listings (30d)" },
                   { icon: <Calendar size={17} />, iconBg: "#fef3c7", iconColor: "#92400e", val: stats.peakDayName, lbl: "Peak Surplus Day" },
-                  { icon: <BarChart2 size={17} />, iconBg: "#ede9fe", iconColor: "#5b21b6", val: stats.totalMeals.toLocaleString(), lbl: "Total Meals" },
+                  { icon: <BarChart2 size={17} />, iconBg: "#ede9fe", iconColor: "#5b21b6", val: (stats.totalMeals ?? 0).toLocaleString(), lbl: "Total Meals" },
                 ].map((s) => (
                   <div key={s.lbl} className="np-stat">
                     <div className="np-stat-icon" style={{ background: s.iconBg, color: s.iconColor }}>{s.icon}</div>

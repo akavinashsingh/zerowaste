@@ -7,7 +7,7 @@ import {
   Package, BarChart2, Loader2, RefreshCw,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
 
 type PredictionStats = {
@@ -206,7 +206,7 @@ export default function DonorPredictionsClient() {
                     {[
                       { label: "Total listings (90 days)", value: stats.total },
                       { label: "Deliveries completed", value: stats.delivered },
-                      { label: "Most donated food type", value: stats.topFoodType.charAt(0).toUpperCase() + stats.topFoodType.slice(1) },
+                      { label: "Most donated food type", value: stats.topFoodType ? stats.topFoodType.charAt(0).toUpperCase() + stats.topFoodType.slice(1) : "—" },
                       { label: "Peak posting day", value: stats.peakDayName },
                     ].map((row) => (
                       <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(44,40,32,0.06)", paddingBottom: "0.875rem" }}>

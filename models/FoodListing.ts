@@ -85,6 +85,11 @@ const FoodListingSchema = new Schema<IFoodListing>({
   createdAt: { type: Date, default: Date.now, index: true },
 });
 FoodListingSchema.index({ location: '2dsphere' });
+// Compound indexes for common query patterns
+FoodListingSchema.index({ status: 1, expiresAt: 1 });  // cron expiry scan
+FoodListingSchema.index({ donorId: 1, status: 1 });    // donor dashboard listing fetch
+FoodListingSchema.index({ claimedBy: 1, claimedAt: -1 }); // NGO claimed listings
+
 const FoodListing: Model<IFoodListing> =
   mongoose.models.FoodListing || mongoose.model<IFoodListing>("FoodListing", FoodListingSchema);
 

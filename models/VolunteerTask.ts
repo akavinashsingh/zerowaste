@@ -35,6 +35,10 @@ const VolunteerTaskSchema = new Schema<IVolunteerTask>({
   deliveredAt: { type: Date },
 });
 
+// Compound indexes for common query patterns
+VolunteerTaskSchema.index({ volunteerId: 1, status: 1 }); // isVolunteerBusy() check
+VolunteerTaskSchema.index({ listingId: 1, status: 1 });   // task sync on listing updates
+
 const VolunteerTask: Model<IVolunteerTask> =
   mongoose.models.VolunteerTask ||
   mongoose.model<IVolunteerTask>("VolunteerTask", VolunteerTaskSchema);

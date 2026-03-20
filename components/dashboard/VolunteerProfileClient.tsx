@@ -21,9 +21,28 @@ export default function VolunteerProfileClient({ sessionUser }: { sessionUser: S
   const [lat, setLat] = useState(sessionUser.location?.lat ? String(sessionUser.location.lat) : "");
   const [lng, setLng] = useState(sessionUser.location?.lng ? String(sessionUser.location.lng) : "");
   const [isAvailable, setIsAvailable] = useState(sessionUser.isAvailable !== false);
+  const [availabilityMsg, setAvailabilityMsg] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function toggleAvailability() {
+    const next = !isAvailable;
+    setIsAvailable(next);
+    setAvailabilityMsg(null);
+    try {
+      const res = await fetch("/api/volunteer/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isAvailable: next }),
+      });
+      if (!res.ok) throw new Error();
+      setAvailabilityMsg(next ? "You are now available for tasks." : "You are now offline.");
+    } catch {
+      setIsAvailable(!next); // revert
+      setAvailabilityMsg("Failed to update availability. Please try again.");
+    }
+  }
 
   function fillFromGeolocation() {
     setMessage(null);
@@ -183,7 +202,7 @@ export default function VolunteerProfileClient({ sessionUser }: { sessionUser: S
               </div>
               <button
                 type="button"
-                onClick={() => setIsAvailable((v) => !v)}
+                onClick={() => void toggleAvailability()}
                 className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
                   isAvailable ? "bg-[color:var(--accent)]" : "bg-gray-300"
                 }`}
@@ -195,6 +214,9 @@ export default function VolunteerProfileClient({ sessionUser }: { sessionUser: S
                 />
               </button>
             </div>
+            {availabilityMsg && (
+              <p className="mt-2 text-xs text-[color:var(--muted)]">{availabilityMsg}</p>
+            )}
           </div>
 
           {(error || message) && (

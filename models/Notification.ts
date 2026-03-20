@@ -15,8 +15,13 @@ const NotificationSchema = new Schema<INotification>({
   message: { type: String, required: true },
   listingId: { type: Schema.Types.ObjectId, ref: "FoodListing" },
   read: { type: Boolean, default: false, index: true },
-  createdAt: { type: Date, default: Date.now, index: true },
+  createdAt: { type: Date, default: Date.now },
 });
+
+// TTL index: auto-delete notifications older than 30 days
+NotificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 2592000 });
+// Compound index for unread count query (used in dashboard layout)
+NotificationSchema.index({ userId: 1, read: 1 });
 
 const Notification: Model<INotification> =
   mongoose.models.Notification || mongoose.model<INotification>("Notification", NotificationSchema);

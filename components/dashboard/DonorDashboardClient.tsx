@@ -7,8 +7,9 @@ import {
   Plus, Package, CheckCircle2, Clock, XCircle,
   ChevronRight, MapPin, Loader2, Upload, X,
   Flame, Leaf, Box, Calendar, Users, Truck,
-  AlertTriangle, Sparkles
+  AlertTriangle, Sparkles, Trash2
 } from "lucide-react";
+import { useSocket } from "@/hooks/useSocket";
 
 /* -- types -- */
 type FoodItem = { name: string; quantity: string; unit: string };
@@ -74,6 +75,8 @@ export default function DonorDashboard({ donorName }: { donorName: string }) {
   const [stats, setStats] = useState<DonorStats>({ total: 0, active: 0, delivered: 0, expired: 0 });
   const [loadingListings, setLoadingListings] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { socketRef } = useSocket();
 
   const fetchListings = useCallback(async () => {
     setLoadingListings(true);
@@ -96,6 +99,33 @@ export default function DonorDashboard({ donorName }: { donorName: string }) {
   useEffect(() => {
     void fetchListings();
   }, [fetchListings]);
+
+  // Real-time: refresh when volunteer is assigned or listing status changes
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+    const refresh = () => void fetchListings();
+    socket.on("volunteer_assigned", refresh);
+    socket.on("listing_status", refresh);
+    return () => {
+      socket.off("volunteer_assigned", refresh);
+      socket.off("listing_status", refresh);
+    };
+  }, [socketRef, fetchListings]);
+
+  async function handleDelete(listingId: string) {
+    if (!window.confirm("Delete this listing? This cannot be undone.")) return;
+    setDeletingId(listingId);
+    try {
+      const res = await fetch(`/api/listings/${listingId}`, { method: "DELETE" });
+      if (res.ok) {
+        setListings((prev) => prev.filter((l) => l._id !== listingId));
+        setStats((prev) => ({ ...prev, total: prev.total - 1, active: Math.max(0, prev.active - 1) }));
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <>
@@ -310,9 +340,23 @@ export default function DonorDashboard({ donorName }: { donorName: string }) {
 
                     <div className="dd-card-footer">
                       <div className="dd-card-footer-text">Expires {fmtDate(listing.expiresAt)}</div>
-                      <div className={`dd-expiry ${expiry.urgent ? "urgent" : "ok"}`}>
-                        {expiry.urgent && <AlertTriangle size={11} style={{ display: "inline", marginRight: 3 }} />}
-                        {expiry.text}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div className={`dd-expiry ${expiry.urgent ? "urgent" : "ok"}`}>
+                          {expiry.urgent && <AlertTriangle size={11} style={{ display: "inline", marginRight: 3 }} />}
+                          {expiry.text}
+                        </div>
+                        {listing.status === "available" && (
+                          <button
+                            onClick={() => void handleDelete(listing._id)}
+                            disabled={deletingId === listing._id}
+                            title="Delete listing"
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "#a09a94", padding: "2px 4px", borderRadius: 6, display: "flex", alignItems: "center", transition: "color 0.15s" }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#dc2626"; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#a09a94"; }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -341,7 +385,6 @@ function PostFoodModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   const [step, setStep] = useState(1);
   const [foodItems, setFoodItems] = useState<FoodItem[]>([{ name: "", quantity: "", unit: "kg" }]);
   const [foodType, setFoodType] = useState<"cooked" | "packaged" | "raw">("cooked");
-  const [quantityMeals, setQuantityMeals] = useState("");
   const [totalQuantity, setTotalQuantity] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [address, setAddress] = useState("");
@@ -389,7 +432,6 @@ function PostFoodModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
           foodItems,
           foodType,
           totalQuantity,
-          quantityMeals: Number(quantityMeals),
           expiresAt,
           images,
           location: { lat: Number(lat), lng: Number(lng), address },
@@ -408,7 +450,7 @@ function PostFoodModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   }
 
   const STEP_LABELS = ["Food Details", "Pickup Info", "Review & Post"];
-  const canNext1 = foodItems.every((f) => f.name && f.quantity) && quantityMeals && totalQuantity;
+  const canNext1 = foodItems.every((f) => f.name && f.quantity) && totalQuantity;
   const canNext2 = expiresAt && address && lat && lng;
 
   return (
@@ -530,15 +572,9 @@ function PostFoodModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
                   ))}
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                  <div>
-                    <span className="mf-label">Number of meals</span>
-                    <input className="mf-input" type="number" min="1" placeholder="e.g. 40" value={quantityMeals} onChange={(e) => setQuantityMeals(e.target.value)} />
-                  </div>
-                  <div>
-                    <span className="mf-label">Total quantity</span>
-                    <input className="mf-input" placeholder="e.g. 10 kg" value={totalQuantity} onChange={(e) => setTotalQuantity(e.target.value)} />
-                  </div>
+                <div>
+                  <span className="mf-label">Total quantity</span>
+                  <input className="mf-input" placeholder="e.g. 10 kg or 40 servings" value={totalQuantity} onChange={(e) => setTotalQuantity(e.target.value)} />
                 </div>
               </div>
             )}
@@ -554,13 +590,10 @@ function PostFoodModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
                 <input className="mf-input" placeholder="Full address" value={address} style={{ marginBottom: "1.25rem" }}
                   onChange={(e) => setAddress(e.target.value)} />
 
-                <span className="mf-label">Coordinates</span>
-                <div className="mf-loc-row" style={{ marginBottom: "1.25rem" }}>
-                  <input className="mf-input" placeholder="Latitude" type="number" step="any" value={lat} onChange={(e) => setLat(e.target.value)} />
-                  <input className="mf-input" placeholder="Longitude" type="number" step="any" value={lng} onChange={(e) => setLng(e.target.value)} />
-                  <button type="button" className="mf-loc-btn" onClick={detectLoc}>
+                <div style={{ marginBottom: "1.25rem" }}>
+                  <button type="button" className="mf-loc-btn" style={{ width: "100%", justifyContent: "center" }} onClick={detectLoc}>
                     {locLoading ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <MapPin size={13} />}
-                    Detect
+                    {lat && lng ? "✓ Location detected — tap to update" : "Detect my location"}
                   </button>
                 </div>
 
@@ -583,9 +616,9 @@ function PostFoodModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
                   {[
                     { label: "Food items", value: foodItems.map((f) => `${f.name} (${f.quantity} ${f.unit})`).join(", ") },
                     { label: "Food type", value: foodType.charAt(0).toUpperCase() + foodType.slice(1) },
-                    { label: "Meals", value: `${quantityMeals} meals · ${totalQuantity}` },
+                    { label: "Total quantity", value: totalQuantity },
                     { label: "Pickup by", value: expiresAt ? new Date(expiresAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—" },
-                    { label: "Location", value: address },
+                    { label: "Location", value: address || (lat && lng ? `${lat}, ${lng}` : "Not set") },
                     { label: "Photos", value: images.length ? `${images.length} uploaded` : "None" },
                   ].map((r) => (
                     <div key={r.label} className="mf-review-row">

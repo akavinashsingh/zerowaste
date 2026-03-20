@@ -11,6 +11,7 @@ type SessionUser = {
     lat: number;
     lng: number;
   };
+  isAvailable?: boolean;
 };
 
 export default function VolunteerProfileClient({ sessionUser }: { sessionUser: SessionUser }) {
@@ -19,6 +20,7 @@ export default function VolunteerProfileClient({ sessionUser }: { sessionUser: S
   const [address, setAddress] = useState(sessionUser.address ?? "");
   const [lat, setLat] = useState(sessionUser.location?.lat ? String(sessionUser.location.lat) : "");
   const [lng, setLng] = useState(sessionUser.location?.lng ? String(sessionUser.location.lng) : "");
+  const [isAvailable, setIsAvailable] = useState(sessionUser.isAvailable !== false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export default function VolunteerProfileClient({ sessionUser }: { sessionUser: S
             lat: Number(lat),
             lng: Number(lng),
           },
+          isAvailable,
         }),
       });
 
@@ -167,6 +170,30 @@ export default function VolunteerProfileClient({ sessionUser }: { sessionUser: S
                   required
                 />
               </label>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[color:var(--border)] bg-white/70 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-[color:var(--foreground)]">Available for tasks</p>
+                <p className="text-xs text-[color:var(--muted)] mt-0.5">
+                  {isAvailable ? "You will be assigned new pickups" : "You will not receive new task assignments"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAvailable((v) => !v)}
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
+                  isAvailable ? "bg-[color:var(--accent)]" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                    isAvailable ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
             </div>
           </div>
 

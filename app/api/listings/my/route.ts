@@ -23,6 +23,8 @@ export async function GET() {
 
   const rawListings = await FoodListing.find({ donorId: session.user.id })
     .sort({ createdAt: -1 })
+    .populate("claimedBy", "name phone")
+    .populate("assignedVolunteer", "name phone")
     .lean();
 
   const listings = rawListings.map((doc) => ({

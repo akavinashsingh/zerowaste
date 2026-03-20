@@ -2,6 +2,8 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
 import { authOptions } from "@/lib/auth";
+import { connectMongo } from "@/lib/mongodb";
+import User from "@/models/User";
 import VolunteerProfileClient from "@/components/dashboard/VolunteerProfileClient";
 
 export default async function VolunteerProfilePage() {
@@ -15,5 +17,9 @@ export default async function VolunteerProfilePage() {
     redirect(`/dashboard/${session.user.role}`);
   }
 
-  return <VolunteerProfileClient sessionUser={session.user} />;
+  await connectMongo();
+  const user = await User.findById(session.user.id).select("isAvailable").lean();
+  const isAvailable = (user as { isAvailable?: boolean } | null)?.isAvailable !== false;
+
+  return <VolunteerProfileClient sessionUser={{ ...session.user, isAvailable }} />;
 }

@@ -121,6 +121,7 @@ export async function autoAssignVolunteer(
         query: {
           role: "volunteer",
           isActive: true,
+          isAvailable: { $ne: false },
           "location.coordinates": { $exists: true, $not: { $size: 0 } },
         },
       },

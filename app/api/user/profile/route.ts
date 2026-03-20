@@ -41,6 +41,7 @@ export async function PATCH(request: Request) {
       lat?: number;
       lng?: number;
     };
+    isAvailable?: boolean;
   };
 
   const name = String(body.name ?? "").trim();
@@ -55,22 +56,26 @@ export async function PATCH(request: Request) {
 
   await connectMongo();
 
+  const $set: Record<string, unknown> = {
+    name,
+    phone,
+    address,
+    location: coordinatesToGeoJSON(lat, lng),
+  };
+
+  if (typeof body.isAvailable === "boolean") {
+    $set.isAvailable = body.isAvailable;
+  }
+
   const updatedUser = await User.findByIdAndUpdate(
     session.user.id,
-    {
-      $set: {
-        name,
-        phone,
-        address,
-        location: coordinatesToGeoJSON(lat, lng),
-      },
-    },
+    { $set },
     {
       new: true,
       runValidators: true,
     },
   )
-    .select("name email role phone address location")
+    .select("name email role phone address location isAvailable")
     .lean();
 
   if (!updatedUser) {

@@ -5,11 +5,16 @@
   --brand-orange-light: #fff7ed;
   --brand-blue: #2563eb;
   --brand-blue-light: #eff6ff;
-  --surface: #f8fafc;
+  --surface: #fafaf9;
+  --surface-strong: #f0ece6;
   --card: #ffffff;
-  --border: #e2e8f0;
+  --border: #e7e2db;
   --text-primary: #0f172a;
   --text-secondary: #64748b;
+  --foreground: #1c1917;
+  --muted: #78716c;
+  --accent: #c8601a;
+  --accent-strong: #a04d14;
   --radius: 16px;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);

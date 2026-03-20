@@ -19,6 +19,8 @@ export interface IUser extends Document {
   pricePerKm?: number;
   /** Volunteer only: average rating out of 5 */
   rating?: number;
+  /** Volunteer only: whether they are currently available for task assignment */
+  isAvailable?: boolean;
   createdAt: Date;
 }
 
@@ -36,6 +38,7 @@ const UserSchema = new Schema<IUser>({
   },
   pricePerKm: { type: Number, min: 1, max: 200, default: 10 },
   rating: { type: Number, min: 0, max: 5, default: 0 },
+  isAvailable: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
 });
 

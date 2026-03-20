@@ -54,6 +54,7 @@ export default function NgoBrowseClient({ sessionUser }: { sessionUser: SessionU
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState<string | null>(null);
+  const [claimMsg, setClaimMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [foodFilter, setFoodFilter] = useState<FoodFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
   const [viewMode, setViewMode] = useState<"card" | "map">("card");
@@ -90,11 +91,28 @@ export default function NgoBrowseClient({ sessionUser }: { sessionUser: SessionU
 
   async function claimListing(id: string) {
     setClaiming(id);
+    setClaimMsg(null);
     try {
       const res = await fetch(`/api/listings/${id}/claim`, { method: "POST" });
-      if (res.ok) {
-        setListings((prev) => prev.filter((l) => l._id !== id));
+      const data = (await res.json()) as { listing?: unknown; warning?: string; error?: string; code?: string };
+
+      if (!res.ok) {
+        setClaimMsg({ text: data.error ?? "Failed to claim listing.", ok: false });
+        return;
       }
+
+      if (data.warning) {
+        // Soft failure: listing was NOT claimed (no volunteers available etc.)
+        setClaimMsg({ text: data.warning, ok: false });
+        return;
+      }
+
+      // Success: listing claimed (and volunteer assigned)
+      setListings((prev) => prev.filter((l) => l._id !== id));
+      setClaimMsg({ text: "Listing claimed! A volunteer has been assigned.", ok: true });
+      window.setTimeout(() => setClaimMsg(null), 4000);
+    } catch {
+      setClaimMsg({ text: "Network error. Please try again.", ok: false });
     } finally {
       setClaiming(null);
     }
@@ -168,6 +186,18 @@ export default function NgoBrowseClient({ sessionUser }: { sessionUser: SessionU
       <div className="nb">
         <div className="nb-inner">
           <Link href="/dashboard/ngo" className="nb-back">← Dashboard</Link>
+
+          {claimMsg && (
+            <div style={{
+              padding: "0.875rem 1.25rem", borderRadius: 14, marginBottom: "1rem",
+              fontSize: "0.875rem", fontWeight: 600,
+              background: claimMsg.ok ? "#f0fdf4" : "#fef2f2",
+              color: claimMsg.ok ? "#1a5c38" : "#dc2626",
+              border: `1px solid ${claimMsg.ok ? "rgba(26,92,56,0.2)" : "rgba(220,38,38,0.2)"}`,
+            }}>
+              {claimMsg.ok ? "✓ " : "⚠ "}{claimMsg.text}
+            </div>
+          )}
 
           <div className="nb-header">
             <div>

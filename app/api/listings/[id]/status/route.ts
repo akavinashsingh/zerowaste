@@ -1,10 +1,13 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
 import { sendNotification } from "@/lib/notify";
+import { getIO } from "@/lib/socket";
 import FoodListing from "@/models/FoodListing";
+import VolunteerTask from "@/models/VolunteerTask";
 
 const ALLOWED_TRANSITIONS: Record<string, string> = {
   picked_up: "claimed",
@@ -55,13 +58,29 @@ export async function PATCH(
     );
   }
 
+  const now = new Date();
   listing.status = newStatus as "picked_up" | "delivered";
   if (newStatus === "picked_up") {
-    listing.pickedUpAt = new Date();
+    listing.pickedUpAt = now;
   } else {
-    listing.deliveredAt = new Date();
+    listing.deliveredAt = now;
   }
   await listing.save();
+
+  // Sync VolunteerTask to match listing status
+  await VolunteerTask.findOneAndUpdate(
+    {
+      listingId: new Types.ObjectId(id),
+      volunteerId: new Types.ObjectId(session.user.id),
+      status: { $nin: ["delivered", "cancelled"] },
+    },
+    {
+      $set: {
+        status: newStatus === "picked_up" ? "picked_up" : "delivered",
+        ...(newStatus === "picked_up" ? { pickedUpAt: now } : { deliveredAt: now }),
+      },
+    },
+  );
 
   const updated = await FoodListing.findById(id)
     .populate("donorId", "name phone email address location")
@@ -73,6 +92,18 @@ export async function PATCH(
     ...updated,
     location: normalizeLocation(updated?.location as RawLocation | undefined),
   };
+
+  // Broadcast status change to all parties via Socket.IO
+  const io = getIO();
+  const statusPayload = { listingId: id, status: newStatus };
+  if (io) {
+    const donorId = listing.donorId.toString();
+    const volunteerId = session.user.id;
+    const ngoId = listing.claimedBy?.toString();
+    io.to(donorId).emit("listing_status", statusPayload);
+    io.to(volunteerId).emit("listing_status", statusPayload);
+    if (ngoId) io.to(ngoId).emit("listing_status", statusPayload);
+  }
 
   const message =
     newStatus === "picked_up"

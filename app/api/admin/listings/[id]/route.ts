@@ -4,6 +4,7 @@ import { adminOnly } from "@/lib/adminOnly";
 import { connectMongo } from "@/lib/mongodb";
 import { logAdminAction } from "@/lib/audit";
 import FoodListing from "@/models/FoodListing";
+import VolunteerTask from "@/models/VolunteerTask";
 
 const allowedStatuses = new Set(["available", "claimed", "picked_up", "delivered", "expired"] as const);
 
@@ -67,6 +68,27 @@ export const PATCH = adminOnly(async (request: Request, { params }: RouteContext
     ...listing,
     location: normalizeLocation(listing.location as RawLocation | undefined),
   };
+
+  // Sync VolunteerTask to match the new listing status
+  const taskStatus =
+    body.status === "delivered" ? "delivered"
+    : body.status === "picked_up" ? "picked_up"
+    : body.status === "available" || body.status === "expired" ? "cancelled"
+    : null;
+
+  if (taskStatus) {
+    const taskUpdate: Record<string, unknown> = { status: taskStatus };
+    if (taskStatus === "picked_up" || taskStatus === "delivered") {
+      taskUpdate.pickedUpAt = new Date();
+    }
+    if (taskStatus === "delivered") {
+      taskUpdate.deliveredAt = new Date();
+    }
+    await VolunteerTask.updateMany(
+      { listingId: listing._id, status: { $nin: ["delivered", "cancelled"] } },
+      { $set: taskUpdate },
+    );
+  }
 
   void logAdminAction({
     adminId: session.user.id,

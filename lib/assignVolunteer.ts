@@ -112,6 +112,13 @@ export async function autoAssignVolunteer(
     };
   }
 
+  if (listing.expiresAt < new Date()) {
+    return {
+      ok: false,
+      error: { code: "LISTING_UNAVAILABLE", message: "This listing has expired." },
+    };
+  }
+
   const [pickupLng, pickupLat] = listing.location.coordinates;
 
   // ── 2. Find nearby volunteers via $geoNear ────────────────────────────────

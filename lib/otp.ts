@@ -211,9 +211,9 @@ export async function verifyAndAdvance(
     inputBuf.length === storedBuf.length && crypto.timingSafeEqual(inputBuf, storedBuf);
 
   if (!match) {
-    otp.attempts += 1;
-    await otp.save();
-    const attemptsLeft = MAX_OTP_ATTEMPTS - otp.attempts;
+    // Atomic increment to avoid race on attempt counter
+    await OTP.findByIdAndUpdate(otp._id, { $inc: { attempts: 1 } });
+    const attemptsLeft = MAX_OTP_ATTEMPTS - (otp.attempts + 1);
     return {
       ok: false,
       error: `Incorrect OTP. ${attemptsLeft} attempt${attemptsLeft === 1 ? "" : "s"} remaining.`,
@@ -222,9 +222,20 @@ export async function verifyAndAdvance(
     };
   }
 
-  // ── 6. Mark OTP used ───────────────────────────────────────────────────────
-  otp.isUsed = true;
-  await otp.save();
+  // ── 6. Mark OTP used — atomic to prevent double-submission race ────────────
+  // Only succeeds if it hasn't been used yet; returns null if already consumed.
+  const claimed = await OTP.findOneAndUpdate(
+    { _id: otp._id, isUsed: false },
+    { $set: { isUsed: true } },
+    { new: true },
+  );
+  if (!claimed) {
+    return {
+      ok: false,
+      error: "This OTP was already used. Please contact support.",
+      httpStatus: 409,
+    };
+  }
 
   // ── 7. Advance listing status ──────────────────────────────────────────────
   const newStatus = type === "pickup" ? "picked_up" : "delivered";
@@ -236,7 +247,7 @@ export async function verifyAndAdvance(
   await listing.save();
 
   // ── 8. Sync VolunteerTask ──────────────────────────────────────────────────
-  void VolunteerTask.findOneAndUpdate(
+  await VolunteerTask.findOneAndUpdate(
     {
       listingId: listing._id,
       volunteerId: new Types.ObjectId(volunteerId),

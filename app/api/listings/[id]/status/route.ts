@@ -27,8 +27,21 @@ export async function PATCH(
 ) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.id || session.user.role !== "volunteer") {
-    return NextResponse.json({ error: "Only volunteers can update task status." }, { status: 403 });
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
+
+  // Volunteers must go through OTP verification — use POST /api/otp/verify instead.
+  if (session.user.role === "volunteer") {
+    return NextResponse.json(
+      { error: "Volunteers must verify status changes via OTP. Use POST /api/otp/verify." },
+      { status: 403 },
+    );
+  }
+
+  // Only admins can bypass OTP (for operational overrides)
+  if (session.user.role !== "admin") {
+    return NextResponse.json({ error: "Only admins can directly update task status." }, { status: 403 });
   }
 
   const { id } = await params;

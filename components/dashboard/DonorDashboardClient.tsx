@@ -70,7 +70,17 @@ const UNITS = ["kg", "g", "litres", "pcs", "packets", "boxes", "servings"];
 /* =================================================================
    DONOR DASHBOARD
 ================================================================= */
-export default function DonorDashboard({ donorName }: { donorName: string }) {
+export default function DonorDashboard({
+  donorName,
+  donorAddress = "",
+  donorLat,
+  donorLng,
+}: {
+  donorName: string;
+  donorAddress?: string;
+  donorLat?: number;
+  donorLng?: number;
+}) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [stats, setStats] = useState<DonorStats>({ total: 0, active: 0, delivered: 0, expired: 0 });
   const [loadingListings, setLoadingListings] = useState(true);
@@ -372,7 +382,13 @@ export default function DonorDashboard({ donorName }: { donorName: string }) {
       </button>
 
       {showModal && (
-        <PostFoodModal onClose={() => setShowModal(false)} onSuccess={() => { setShowModal(false); void fetchListings(); }} />
+        <PostFoodModal
+          onClose={() => setShowModal(false)}
+          onSuccess={() => { setShowModal(false); void fetchListings(); }}
+          defaultAddress={donorAddress}
+          defaultLat={donorLat}
+          defaultLng={donorLng}
+        />
       )}
     </>
   );
@@ -381,30 +397,57 @@ export default function DonorDashboard({ donorName }: { donorName: string }) {
 /* =================================================================
    POST FOOD MODAL - 3-step wizard
 ================================================================= */
-function PostFoodModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function PostFoodModal({
+  onClose,
+  onSuccess,
+  defaultAddress = "",
+  defaultLat,
+  defaultLng,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+  defaultAddress?: string;
+  defaultLat?: number;
+  defaultLng?: number;
+}) {
   const [step, setStep] = useState(1);
   const [foodItems, setFoodItems] = useState<FoodItem[]>([{ name: "", quantity: "", unit: "kg" }]);
   const [foodType, setFoodType] = useState<"cooked" | "packaged" | "raw">("cooked");
   const [totalQuantity, setTotalQuantity] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
-  const [address, setAddress] = useState("");
-  const [lat, setLat] = useState("");
-  const [lng, setLng] = useState("");
+  const [address, setAddress] = useState(defaultAddress);
+  const [lat, setLat] = useState(defaultLat ? String(defaultLat) : "");
+  const [lng, setLng] = useState(defaultLng ? String(defaultLng) : "");
   const [images, setImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  function detectLoc() {
+  async function detectLoc() {
+    if (!("geolocation" in navigator)) return;
     setLocLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setLat(p.coords.latitude.toFixed(6));
-        setLng(p.coords.longitude.toFixed(6));
+      async (p) => {
+        const newLat = p.coords.latitude.toFixed(6);
+        const newLng = p.coords.longitude.toFixed(6);
+        setLat(newLat);
+        setLng(newLng);
+        // Reverse-geocode to get a human-readable address
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${newLat}&lon=${newLng}`,
+            { headers: { "Accept-Language": "en" } },
+          );
+          const data = (await res.json()) as { display_name?: string };
+          if (data.display_name) setAddress(data.display_name);
+        } catch {
+          // Reverse geocode failed — leave address as-is so user can type manually
+        }
         setLocLoading(false);
       },
       () => setLocLoading(false),
+      { enableHighAccuracy: true, timeout: 10000 },
     );
   }
 
@@ -591,9 +634,9 @@ function PostFoodModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
                   onChange={(e) => setAddress(e.target.value)} />
 
                 <div style={{ marginBottom: "1.25rem" }}>
-                  <button type="button" className="mf-loc-btn" style={{ width: "100%", justifyContent: "center" }} onClick={detectLoc}>
+                  <button type="button" className="mf-loc-btn" style={{ width: "100%", justifyContent: "center" }} onClick={() => void detectLoc()}>
                     {locLoading ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <MapPin size={13} />}
-                    {lat && lng ? "✓ Location detected — tap to update" : "Detect my location"}
+                    {locLoading ? "Detecting location…" : lat && lng ? "✓ Location set — tap to use current GPS" : "Detect my location"}
                   </button>
                 </div>
 

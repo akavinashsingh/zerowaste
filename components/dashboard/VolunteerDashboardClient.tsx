@@ -99,9 +99,9 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
   const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState<Record<string, boolean>>({});
-  const [isUpdating, setIsUpdating] = useState<Record<string, boolean>>({});
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [routeTask, setRouteTask] = useState<Task | null>(null);
+  const [otpModal, setOtpModal] = useState<{ taskId: string; type: "pickup" | "delivery" } | null>(null);
 
   const volunteerLocation = sessionUser.location;
 
@@ -163,41 +163,27 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
     }
   }
 
-  async function handleStatusUpdate(taskId: string, newStatus: "picked_up" | "delivered") {
-    setIsUpdating((s) => ({ ...s, [taskId]: true }));
-    // Optimistic: update badge immediately
+  function handleOtpSuccess(taskId: string, newStatus: "picked_up" | "delivered") {
+    setOtpModal(null);
     setMyTasks((current) =>
       current.map((t) => (t._id === taskId ? { ...t, status: newStatus } : t)),
     );
-
-    try {
-      const res = await fetch(`/api/listings/${taskId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      const data = (await res.json()) as { listing?: Task; error?: string };
-      if (!res.ok || !data.listing) throw new Error(data.error || "Failed to update status.");
-      setMyTasks((current) => current.map((t) => (t._id === taskId ? (data.listing as Task) : t)));
-      addToast(newStatus === "picked_up" ? "Marked as Picked Up." : "Marked as Delivered.", "success");
-    } catch (err) {
-      // Revert optimistic
-      await loadAll();
-      addToast(err instanceof Error ? err.message : "Failed to update status.", "error");
-    } finally {
-      setIsUpdating((s) => ({ ...s, [taskId]: false }));
-    }
+    addToast(
+      newStatus === "picked_up"
+        ? "Pickup confirmed! Head to the NGO for drop-off."
+        : "Delivery confirmed! Great work.",
+      "success",
+    );
   }
 
   const activeTasks = myTasks.filter((t) => t.status === "claimed" || t.status === "picked_up");
   const completedTasks = myTasks.filter((t) => t.status === "delivered");
   const routeMetrics = routeTask && routeTask.claimedBy?.location
     ? getRouteMetrics(
-      { lat: routeTask.location.lat, lng: routeTask.location.lng, label: "Pickup" },
+      { lat: routeTask.location.lat, lng: routeTask.location.lng },
       {
         lat: routeTask.claimedBy.location.lat,
         lng: routeTask.claimedBy.location.lng,
-        label: "Dropoff",
       },
     )
     : null;
@@ -348,8 +334,7 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
                     <ActiveTaskCard
                       key={task._id}
                       task={task}
-                      isUpdating={isUpdating[task._id] ?? false}
-                      onStatusUpdate={handleStatusUpdate}
+                      onOpenOtp={(type) => setOtpModal({ taskId: task._id, type })}
                       onViewRoute={(selectedTask) => setRouteTask(selectedTask)}
                     />
                   ))}
@@ -369,6 +354,15 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
           </div>
         </section>
       </div>
+
+      {otpModal && (
+        <OtpVerifyModal
+          taskId={otpModal.taskId}
+          type={otpModal.type}
+          onSuccess={(newStatus) => handleOtpSuccess(otpModal.taskId, newStatus)}
+          onClose={() => setOtpModal(null)}
+        />
+      )}
 
       {routeTask ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -423,13 +417,11 @@ function EmptyState({ text }: { text: string }) {
 
 function ActiveTaskCard({
   task,
-  isUpdating,
-  onStatusUpdate,
+  onOpenOtp,
   onViewRoute,
 }: {
   task: Task;
-  isUpdating: boolean;
-  onStatusUpdate: (id: string, status: "picked_up" | "delivered") => void;
+  onOpenOtp: (type: "pickup" | "delivery") => void;
   onViewRoute: (task: Task) => void;
 }) {
   return (
@@ -469,25 +461,161 @@ function ActiveTaskCard({
       {task.status === "claimed" && (
         <button
           type="button"
-          disabled={isUpdating}
-          onClick={() => onStatusUpdate(task._id, "picked_up")}
-          className="mt-4 w-full rounded-full bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => onOpenOtp("pickup")}
+          className="mt-3 w-full rounded-full bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-600"
         >
-          {isUpdating ? "Updating…" : "Mark as Picked Up"}
+          Mark as Picked Up
         </button>
       )}
 
       {task.status === "picked_up" && (
         <button
           type="button"
-          disabled={isUpdating}
-          onClick={() => onStatusUpdate(task._id, "delivered")}
-          className="mt-4 w-full rounded-full bg-purple-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => onOpenOtp("delivery")}
+          className="mt-3 w-full rounded-full bg-purple-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-600"
         >
-          {isUpdating ? "Updating…" : "Mark as Delivered"}
+          Mark as Delivered
         </button>
       )}
     </article>
+  );
+}
+
+function OtpVerifyModal({
+  taskId,
+  type,
+  onSuccess,
+  onClose,
+}: {
+  taskId: string;
+  type: "pickup" | "delivery";
+  onSuccess: (newStatus: "picked_up" | "delivered") => void;
+  onClose: () => void;
+}) {
+  const [digits, setDigits] = useState(["", "", "", "", "", ""]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+  const inputRefs = useState(() => Array.from({ length: 6 }, () => ({ current: null as HTMLInputElement | null })))[0];
+
+  const isPickup = type === "pickup";
+  const party = isPickup ? "Donor" : "NGO";
+  const code = digits.join("");
+
+  function handleDigit(index: number, value: string) {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    const next = [...digits];
+    next[index] = digit;
+    setDigits(next);
+    if (digit && index < 5) {
+      inputRefs[index + 1].current?.focus();
+    }
+  }
+
+  function handleKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !digits[index] && index > 0) {
+      inputRefs[index - 1].current?.focus();
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasted.length === 6) {
+      setDigits(pasted.split(""));
+      inputRefs[5].current?.focus();
+    }
+  }
+
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (code.length !== 6) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId: taskId, code, type }),
+      });
+      const data = (await res.json()) as { status?: string; error?: string; attemptsLeft?: number };
+      if (!res.ok) {
+        setError(data.error ?? "Verification failed.");
+        if (typeof data.attemptsLeft === "number") setAttemptsLeft(data.attemptsLeft);
+        setDigits(["", "", "", "", "", ""]);
+        inputRefs[0].current?.focus();
+        return;
+      }
+      onSuccess(data.status as "picked_up" | "delivered");
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-7 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-[color:var(--accent)]">
+              OTP Verification
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-[color:var(--foreground)]">
+              {isPickup ? "Confirm Pickup" : "Confirm Delivery"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-[color:var(--border)] px-3 py-1 text-sm text-[color:var(--muted)] hover:bg-stone-50"
+          >
+            Cancel
+          </button>
+        </div>
+
+        <p className="mb-6 text-sm text-[color:var(--muted)]">
+          Ask the <span className="font-semibold text-[color:var(--foreground)]">{party}</span> to show
+          you their OTP and enter it below to confirm{" "}
+          {isPickup ? "you have collected the food." : "the food has been delivered."}
+        </p>
+
+        <form onSubmit={(e) => void handleSubmit(e)}>
+          <div className="mb-5 flex justify-center gap-2" onPaste={handlePaste}>
+            {digits.map((d, i) => (
+              <input
+                key={i}
+                ref={(el) => { inputRefs[i].current = el; }}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={d}
+                onChange={(e) => handleDigit(i, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(i, e)}
+                className="h-12 w-10 rounded-xl border-2 border-[color:var(--border)] bg-stone-50 text-center text-xl font-bold text-[color:var(--foreground)] outline-none transition focus:border-[color:var(--accent)] focus:bg-white"
+              />
+            ))}
+          </div>
+
+          {error && (
+            <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+              {attemptsLeft !== null && attemptsLeft > 0 && (
+                <span className="ml-1 font-semibold">({attemptsLeft} attempt{attemptsLeft === 1 ? "" : "s"} left)</span>
+              )}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={code.length !== 6 || loading}
+            className="w-full rounded-full bg-[color:var(--accent)] py-3 text-sm font-semibold text-white transition hover:bg-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Verifying…" : `Confirm ${isPickup ? "Pickup" : "Delivery"}`}
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 

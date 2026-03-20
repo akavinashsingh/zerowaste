@@ -13,12 +13,15 @@ function normalizeLocation(raw: RawLocation | null | undefined) {
   return { lat: raw.coordinates[1] ?? 0, lng: raw.coordinates[0] ?? 0, address: raw.address ?? "" };
 }
 
-const ERROR_STATUS: Record<string, number> = {
-  LISTING_NOT_FOUND: 404,
-  LISTING_UNAVAILABLE: 409,
-  NO_VOLUNTEERS_NEARBY: 200, // soft — claim still reported, no volunteer yet
-  ALL_VOLUNTEERS_BUSY: 200,
-};
+async function fetchListing(id: string) {
+  const doc = await FoodListing.findById(id)
+    .populate("claimedBy", "name phone email")
+    .populate("donorId", "name phone email address")
+    .populate("assignedVolunteer", "name phone rating")
+    .lean();
+  if (!doc) return null;
+  return { ...doc, location: normalizeLocation(doc.location as RawLocation | undefined) };
+}
 
 export async function POST(
   _: Request,
@@ -34,44 +37,34 @@ export async function POST(
 
   await connectMongo();
 
-  // ── Run auto-assignment (claim + volunteer binding in one transaction) ────
   const outcome = await autoAssignVolunteer(id, session.user.id, session.user.name ?? "NGO");
 
-  if (!outcome.ok) {
-    const { code, message } = outcome.error;
-    const httpStatus = ERROR_STATUS[code] ?? 400;
-
-    // Hard failures (listing gone / not found) — return error immediately
-    if (httpStatus >= 400) {
-      return NextResponse.json({ error: message }, { status: httpStatus });
-    }
-
-    // Soft failures (no volunteer found) — listing was NOT claimed yet.
-    // Return a warning so the NGO client can show a message.
-    return NextResponse.json(
-      {
-        warning: message,
-        code,
-        assignment: null,
-      },
-      { status: 200 },
-    );
+  // Hard failure — listing was NOT claimed
+  if (!outcome.ok && !outcome.claimed) {
+    const statusMap: Record<string, number> = {
+      LISTING_NOT_FOUND: 404,
+      LISTING_UNAVAILABLE: 409,
+    };
+    const httpStatus = statusMap[outcome.error.code] ?? 400;
+    return NextResponse.json({ error: outcome.error.message }, { status: httpStatus });
   }
 
-  // ── Build response: fetch updated listing with populated refs ────────────
-  const updatedListing = await FoodListing.findById(id)
-    .populate("claimedBy", "name phone email")
-    .populate("donorId", "name phone email address")
-    .populate("assignedVolunteer", "name phone rating")
-    .lean();
+  // Fetch the (now-claimed) listing for the response
+  const listing = await fetchListing(id);
 
-  const normalizedListing = {
-    ...updatedListing,
-    location: normalizeLocation(updatedListing?.location as RawLocation | undefined),
-  };
+  // Soft failure — listing WAS claimed, but no volunteer found yet
+  if (!outcome.ok && outcome.claimed) {
+    return NextResponse.json({
+      listing,
+      warning: outcome.error.message,
+      code: outcome.error.code,
+      assignment: null,
+    });
+  }
 
+  // Full success — listing claimed and volunteer assigned
   return NextResponse.json({
-    listing: normalizedListing,
+    listing,
     assignment: outcome.data,
   });
 }

@@ -1,12 +1,18 @@
 /**
  * Auto-assignment service: claim a listing for an NGO and bind the best
- * available nearby volunteer in a single MongoDB transaction.
+ * available nearby volunteer.
  *
- * NOTE: Transactions require a MongoDB replica set (Atlas or local replica).
- * In a standalone dev instance the transaction block is skipped and the writes
- * are applied as individual operations — safe enough for development.
+ * Flow:
+ *   1. Validate listing is available.
+ *   2. Atomically claim it for the NGO (findOneAndUpdate, no transaction needed).
+ *   3. Best-effort: find the nearest non-busy volunteer and bind them.
+ *   4. Return success (with or without volunteer) or hard failure.
+ *
+ * Hard failures  (listing not claimed)  → ok: false, claimed: false
+ * Soft failures  (listing claimed, no volunteer yet) → ok: false, claimed: true
+ * Full success   (listing claimed + volunteer assigned) → ok: true
  */
-import mongoose, { Types } from "mongoose";
+import { Types } from "mongoose";
 
 import { connectMongo } from "@/lib/mongodb";
 import { createOTP } from "@/lib/otp";
@@ -16,12 +22,6 @@ import { getIO } from "@/lib/socket";
 import FoodListing from "@/models/FoodListing";
 import User from "@/models/User";
 import VolunteerTask from "@/models/VolunteerTask";
-
-// ── Internal abort signals (never leak outside this module) ───────────────────
-class ListingUnavailableError extends Error {
-  readonly code = "LISTING_UNAVAILABLE" as const;
-}
-class VolunteerBusyError extends Error {}
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -69,61 +69,76 @@ type GeoVolunteer = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Returns true if the volunteer already has an active (non-terminal) task.
- * We check VolunteerTask (authoritative) first; falls back to FoodListing.
- */
-async function isVolunteerBusy(
-  volunteerId: Types.ObjectId,
-  session: mongoose.ClientSession | null,
-): Promise<boolean> {
-  const query = VolunteerTask.exists({ volunteerId, status: { $in: ["assigned", "picked_up"] } });
-  if (session) query.session(session);
-  const active = await query;
+async function isVolunteerBusy(volunteerId: Types.ObjectId): Promise<boolean> {
+  const active = await VolunteerTask.exists({
+    volunteerId,
+    status: { $in: ["assigned", "picked_up"] },
+  });
   return !!active;
 }
 
 // ── Core service ──────────────────────────────────────────────────────────────
 
-/**
- * Claim a listing for an NGO and auto-assign the nearest available volunteer.
- *
- * @param listingId  The FoodListing to claim
- * @param ngoId      The authenticated NGO's user ID
- * @param ngoName    NGO display name (for notifications)
- * @returns          AssignmentResult on success, AssignmentError otherwise
- */
 export async function autoAssignVolunteer(
   listingId: string,
   ngoId: string,
   ngoName: string,
-): Promise<{ ok: true; data: AssignmentResult } | { ok: false; error: AssignmentError }> {
+): Promise<
+  | { ok: true; data: AssignmentResult }
+  | { ok: false; claimed: true; error: AssignmentError }
+  | { ok: false; claimed: false; error: AssignmentError }
+> {
   await connectMongo();
 
-  // ── 1. Load listing (pre-transaction read) ───────────────────────────────
+  // ── 1. Load and validate listing ─────────────────────────────────────────
   const listing = await FoodListing.findById(listingId).lean();
+
   if (!listing) {
-    return { ok: false, error: { code: "LISTING_NOT_FOUND", message: "Listing not found." } };
+    return { ok: false, claimed: false, error: { code: "LISTING_NOT_FOUND", message: "Listing not found." } };
   }
+
   if (listing.status !== "available") {
     return {
       ok: false,
+      claimed: false,
       error: { code: "LISTING_UNAVAILABLE", message: "This listing has already been claimed." },
     };
   }
 
-  if (listing.expiresAt < new Date()) {
+  const now = new Date();
+  if (listing.expiresAt < now) {
     return {
       ok: false,
+      claimed: false,
       error: { code: "LISTING_UNAVAILABLE", message: "This listing has expired." },
+    };
+  }
+
+  // ── 2. Atomically claim the listing for this NGO ─────────────────────────
+  const ngoObjectId = new Types.ObjectId(ngoId);
+
+  const claimed = await FoodListing.findOneAndUpdate(
+    {
+      _id: new Types.ObjectId(listingId),
+      status: "available",
+      expiresAt: { $gt: now },
+    },
+    { $set: { status: "claimed", claimedBy: ngoObjectId, claimedAt: now } },
+    { new: true },
+  );
+
+  if (!claimed) {
+    // Another NGO claimed it between our read and write
+    return {
+      ok: false,
+      claimed: false,
+      error: { code: "LISTING_UNAVAILABLE", message: "This listing was just claimed by another NGO." },
     };
   }
 
   const [pickupLng, pickupLat] = listing.location.coordinates;
 
-  // ── 2. Find nearby volunteers via $geoNear ────────────────────────────────
-  //    Primary sort: distance ASC (natural from $geoNear)
-  //    Tiebreaker:   rating DESC
+  // ── 3. Find nearby available volunteers ──────────────────────────────────
   const candidates = await User.aggregate<GeoVolunteer>([
     {
       $geoNear: {
@@ -145,131 +160,99 @@ export async function autoAssignVolunteer(
   ]);
 
   if (candidates.length === 0) {
+    // Listing is claimed — NGO can manually assign later via self-assign endpoint
     return {
       ok: false,
+      claimed: true,
       error: {
         code: "NO_VOLUNTEERS_NEARBY",
-        message: `No available volunteers found within ${VOLUNTEER_SEARCH_RADIUS_KM} km.`,
+        message: `Listing claimed! No available volunteers found within ${VOLUNTEER_SEARCH_RADIUS_KM} km. A volunteer can self-assign from the app.`,
       },
     };
   }
 
-  // ── 3. Find the first non-busy candidate and assign atomically ─────────────
-  const ngoObjectId = new Types.ObjectId(ngoId);
+  // ── 4. Find NGO location for route distance calc ─────────────────────────
   const ngoUser = await User.findById(ngoId).select("location").lean();
-  const ngoCoords = (ngoUser?.location as { coordinates?: [number, number] } | null | undefined)
-    ?.coordinates;
+  const ngoCoords = (ngoUser?.location as { coordinates?: [number, number] } | null | undefined)?.coordinates;
 
+  // ── 5. Try each candidate — assign first non-busy volunteer ──────────────
   for (const candidate of candidates) {
-    const mongoSession = await mongoose.startSession();
-    let result: AssignmentResult | null = null;
-    let volunteerWasBusy = false;
+    if (await isVolunteerBusy(candidate._id)) continue;
 
-    try {
-      await mongoSession.withTransaction(async () => {
-        // Re-check listing inside transaction to prevent race condition
-        const freshListing = await FoodListing.findById(listingId).session(mongoSession);
-        if (!freshListing || freshListing.status !== "available") {
-          throw new ListingUnavailableError("Listing is no longer available");
-        }
+    const distanceKm = calcTaskDistanceKm(candidate.location.coordinates, ngoCoords ?? null);
+    const pricePerKm = candidate.pricePerKm ?? PAYOUT_CONFIG.DEFAULT_PRICE_PER_KM;
+    const payoutAmount = distanceKm !== null ? calcPayoutAmount(distanceKm, pricePerKm) : null;
 
-        // Check volunteer availability inside transaction
-        if (await isVolunteerBusy(candidate._id, mongoSession)) {
-          throw new VolunteerBusyError("Volunteer is busy");
-        }
+    // Atomically bind the volunteer to the already-claimed listing
+    const assigned = await FoodListing.findOneAndUpdate(
+      {
+        _id: new Types.ObjectId(listingId),
+        status: "claimed",
+        assignedVolunteer: { $exists: false },
+      },
+      {
+        $set: {
+          assignedVolunteer: candidate._id,
+          volunteerAssignedAt: now,
+          ...(distanceKm !== null && { distanceKm }),
+          ...(payoutAmount !== null && { payoutAmount }),
+          payoutNgoId: ngoObjectId,
+        },
+      },
+      { new: true },
+    );
 
-        // Calculate route distance (pickup → NGO) and payout
-        const distanceKm = calcTaskDistanceKm(
-          candidate.location.coordinates,
-          ngoCoords ?? null,
-        );
-        const pricePerKm = candidate.pricePerKm ?? PAYOUT_CONFIG.DEFAULT_PRICE_PER_KM;
-        const payoutAmount = distanceKm !== null ? calcPayoutAmount(distanceKm, pricePerKm) : null;
-
-        const now = new Date();
-
-        // Mutate listing
-        freshListing.status = "claimed";
-        freshListing.claimedBy = ngoObjectId;
-        freshListing.claimedAt = now;
-        freshListing.assignedVolunteer = candidate._id;
-        freshListing.volunteerAssignedAt = now;
-        if (distanceKm !== null) freshListing.distanceKm = distanceKm;
-        if (payoutAmount !== null) freshListing.payoutAmount = payoutAmount;
-        freshListing.payoutNgoId = ngoObjectId;
-        await freshListing.save({ session: mongoSession });
-
-        // Create the explicit VolunteerTask record
-        const [task] = await VolunteerTask.create(
-          [
-            {
-              listingId: freshListing._id,
-              donorId: freshListing.donorId,
-              ngoId: ngoObjectId,
-              volunteerId: candidate._id,
-              status: "assigned",
-              distanceKm,
-              payoutAmount,
-              assignedAt: now,
-            },
-          ],
-          { session: mongoSession },
-        );
-
-        result = {
-          volunteer: {
-            id: candidate._id.toString(),
-            name: candidate.name,
-            phone: candidate.phone,
-            distanceToPickupKm: parseFloat((candidate.distanceMeters / 1000).toFixed(2)),
-            rating: candidate.rating ?? 0,
-          },
-          task: {
-            id: task._id.toString(),
-            distanceKm,
-            payoutAmount,
-          },
-        };
-      });
-    } catch (err) {
-      await mongoSession.endSession();
-      if (err instanceof ListingUnavailableError) {
-        return { ok: false, error: { code: "LISTING_UNAVAILABLE", message: "This listing was just claimed by another NGO." } };
-      }
-      if (err instanceof VolunteerBusyError) {
-        volunteerWasBusy = true;
-      } else {
-        throw err; // unexpected — propagate
-      }
+    if (!assigned) {
+      // Another request bound a volunteer concurrently — done
+      break;
     }
 
-    if (result) {
-      await mongoSession.endSession();
-      void dispatchEvents({
-        result,
-        donorId: listing.donorId.toString(),
-        ngoId,
-        ngoName,
-        listingId,
-      });
-      return { ok: true, data: result };
-    }
+    const [task] = await VolunteerTask.create([
+      {
+        listingId: claimed._id,
+        donorId: claimed.donorId,
+        ngoId: ngoObjectId,
+        volunteerId: candidate._id,
+        status: "assigned",
+        distanceKm,
+        payoutAmount,
+        assignedAt: now,
+      },
+    ]);
 
-    if (!volunteerWasBusy) {
-      // Session ended in success path above, but result was null — listing was snatched
-      await mongoSession.endSession();
-      return { ok: false, error: { code: "LISTING_UNAVAILABLE", message: "This listing was just claimed by another NGO." } };
-    }
+    const result: AssignmentResult = {
+      volunteer: {
+        id: candidate._id.toString(),
+        name: candidate.name,
+        phone: candidate.phone,
+        distanceToPickupKm: parseFloat((candidate.distanceMeters / 1000).toFixed(2)),
+        rating: candidate.rating ?? 0,
+      },
+      task: {
+        id: task._id.toString(),
+        distanceKm,
+        payoutAmount,
+      },
+    };
 
-    // Volunteer was busy — session already ended in catch, try the next candidate
+    void dispatchEvents({
+      result,
+      donorId: listing.donorId.toString(),
+      ngoId,
+      ngoName,
+      listingId,
+    });
+
+    return { ok: true, data: result };
   }
 
-  // Exhausted all candidates without a successful assignment
+  // All candidates were busy (listing is still claimed)
   return {
     ok: false,
+    claimed: true,
     error: {
       code: "ALL_VOLUNTEERS_BUSY",
-      message: "All nearby volunteers are currently occupied. Please try again shortly.",
+      message: "Listing claimed! All nearby volunteers are currently occupied. A volunteer can self-assign from the app.",
     },
   };
 }
@@ -307,17 +290,14 @@ async function dispatchEvents({
     payoutAmount: task.payoutAmount,
   };
 
-  // Emit dedicated socket events to each party
   if (io) {
     io.to(donorId).emit("volunteer_assigned", socketPayload);
     io.to(volunteer.id).emit("task_assigned", socketPayload);
     io.to(ngoId).emit("volunteer_confirmed", socketPayload);
   }
 
-  // Generate pickup OTP — donor will receive it via socket + notification
   void createOTP(listingId, "pickup");
 
-  // Persist in-app notifications
   await Promise.all([
     sendNotification({
       userId: donorId,

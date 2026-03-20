@@ -94,7 +94,7 @@ export default function NgoBrowseClient({ sessionUser }: { sessionUser: SessionU
     setClaimMsg(null);
     try {
       const res = await fetch(`/api/listings/${id}/claim`, { method: "POST" });
-      const data = (await res.json()) as { listing?: unknown; warning?: string; error?: string; code?: string };
+      const data = (await res.json()) as { listing?: Record<string, unknown> | null; warning?: string; error?: string; code?: string };
 
       if (!res.ok) {
         setClaimMsg({ text: data.error ?? "Failed to claim listing.", ok: false });
@@ -102,12 +102,17 @@ export default function NgoBrowseClient({ sessionUser }: { sessionUser: SessionU
       }
 
       if (data.warning) {
-        // Soft failure: listing was NOT claimed (no volunteers available etc.)
-        setClaimMsg({ text: data.warning, ok: false });
+        // Soft failure: listing WAS claimed but no volunteer found yet.
+        // If the response includes the listing object, the claim succeeded — remove from browse list.
+        if (data.listing) {
+          setListings((prev) => prev.filter((l) => l._id !== id));
+        }
+        setClaimMsg({ text: data.warning, ok: true });
+        window.setTimeout(() => setClaimMsg(null), 6000);
         return;
       }
 
-      // Success: listing claimed (and volunteer assigned)
+      // Full success: listing claimed and volunteer assigned
       setListings((prev) => prev.filter((l) => l._id !== id));
       setClaimMsg({ text: "Listing claimed! A volunteer has been assigned.", ok: true });
       window.setTimeout(() => setClaimMsg(null), 4000);

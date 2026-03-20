@@ -21,24 +21,40 @@ type EarningsSummary = {
   totalPendingINR: number;
 };
 
+type WalletTx = {
+  id: string;
+  amount: number;
+  description: string;
+  balanceAfter: number;
+  createdAt: string;
+};
+
 export default function VolunteerEarningsPage() {
   const [summary, setSummary] = useState<EarningsSummary | null>(null);
   const [tasks, setTasks] = useState<EarningsTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [pricePerKm, setPricePerKm] = useState(10);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletTxs, setWalletTxs] = useState<WalletTx[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/volunteer/earnings", { cache: "no-store" });
-      const data = (await res.json()) as {
+      const [earningsRes, walletRes] = await Promise.all([
+        fetch("/api/volunteer/earnings", { cache: "no-store" }),
+        fetch("/api/wallet", { cache: "no-store" }),
+      ]);
+      const data = (await earningsRes.json()) as {
         summary?: EarningsSummary;
         tasks?: EarningsTask[];
         volunteer?: { pricePerKm?: number };
       };
+      const walletData = (await walletRes.json()) as { balance?: number; transactions?: WalletTx[] };
       setSummary(data.summary ?? null);
       setTasks(data.tasks ?? []);
       setPricePerKm(data.volunteer?.pricePerKm ?? 10);
+      setWalletBalance(walletData.balance ?? 0);
+      setWalletTxs(walletData.transactions ?? []);
     } finally {
       setLoading(false);
     }
@@ -87,6 +103,16 @@ export default function VolunteerEarningsPage() {
         .er-badge { display:inline-flex; padding:2px 8px; border-radius:100px; font-size:0.68rem; font-weight:700; }
         .er-badge.delivered { background:#ede9fe; color:#5b21b6; }
         .er-badge.in-progress { background:#fff7ed; color:#c8601a; }
+        .er-wallet-hero { background:linear-gradient(135deg,#c8601a,#a04d14); border-radius:20px; padding:1.5rem 2rem; margin-bottom:1.5rem; color:white; }
+        .er-wallet-label { font-size:0.68rem; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; opacity:0.65; margin-bottom:0.4rem; }
+        .er-wallet-bal { font-family:'Fraunces',serif; font-size:clamp(2rem,5vw,2.75rem); font-weight:900; letter-spacing:-0.04em; line-height:1; }
+        .er-wallet-sub { font-size:0.78rem; opacity:0.65; margin-top:0.4rem; }
+        .er-tx-list { display:flex; flex-direction:column; gap:0.5rem; margin-bottom:2rem; }
+        .er-tx { background:white; border-radius:12px; border:1px solid rgba(44,40,32,0.07); padding:0.875rem 1.1rem; display:flex; align-items:center; justify-content:space-between; gap:0.75rem; }
+        .er-tx-desc { font-size:0.78rem; font-weight:500; color:#2c2820; }
+        .er-tx-date { font-size:0.68rem; color:#a09a94; margin-top:2px; }
+        .er-tx-amt { font-family:'Fraunces',serif; font-size:0.95rem; font-weight:900; color:#1a5c38; }
+        .er-tx-bal { font-size:0.65rem; color:#a09a94; margin-top:1px; text-align:right; }
         @media(max-width:600px) { .er-cards { grid-template-columns:1fr 1fr; } }
       `}</style>
 
@@ -100,6 +126,34 @@ export default function VolunteerEarningsPage() {
             <div style={{ color: "#a09a94", fontSize: "0.875rem" }}>Loading earnings…</div>
           ) : (
             <>
+              {/* Wallet balance hero */}
+              <div className="er-wallet-hero">
+                <div className="er-wallet-label">Wallet Balance</div>
+                <div className="er-wallet-bal">₹{(walletBalance ?? 0).toLocaleString("en-IN")}</div>
+                <div className="er-wallet-sub">Credits are added automatically after each confirmed delivery</div>
+              </div>
+
+              {/* Wallet transaction history */}
+              {walletTxs.length > 0 && (
+                <>
+                  <div className="er-sec-title">Wallet Credits ({walletTxs.length})</div>
+                  <div className="er-tx-list">
+                    {walletTxs.map((tx) => (
+                      <div key={tx.id} className="er-tx">
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="er-tx-desc">💰 {tx.description}</div>
+                          <div className="er-tx-date">{new Date(tx.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div className="er-tx-amt">+₹{tx.amount}</div>
+                          <div className="er-tx-bal">bal ₹{tx.balanceAfter.toLocaleString("en-IN")}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
               <div className="er-cards">
                 <div className="er-card earned">
                   <div className="er-card-val">₹{summary?.totalEarnedINR ?? 0}</div>

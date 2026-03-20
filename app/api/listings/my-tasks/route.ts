@@ -27,10 +27,18 @@ export async function GET() {
     .populate("claimedBy", "name phone address location")
     .lean();
 
-  const tasks = rawTasks.map((doc) => ({
-    ...doc,
-    location: normalizeLocation(doc.location as unknown as RawLocation),
-  }));
+  const tasks = rawTasks.map((doc) => {
+    const claimedBy = doc.claimedBy as unknown as { location?: RawLocation } | null;
+    const claimedByNorm = claimedBy
+      ? { ...(claimedBy as object), location: normalizeLocation(claimedBy.location) }
+      : doc.claimedBy;
+
+    return {
+      ...doc,
+      location: normalizeLocation(doc.location as unknown as RawLocation),
+      claimedBy: claimedByNorm,
+    };
+  });
 
   return NextResponse.json({ tasks });
 }

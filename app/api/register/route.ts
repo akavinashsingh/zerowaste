@@ -23,6 +23,8 @@ export async function POST(req: Request) {
     phone,
     address,
     location: geoLocation,
+    // Seed NGO accounts with ₹5000 starting wallet balance
+    walletBalance: role === "ngo" ? 5000 : 0,
   });
   return new Response(JSON.stringify({ id: user._id, email: user.email, role: user.role }), { status: 201 });
 }

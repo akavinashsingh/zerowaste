@@ -12,14 +12,16 @@
  */
 
 import crypto from "crypto";
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 
 import { connectMongo } from "@/lib/mongodb";
 import { sendNotification } from "@/lib/notify";
 import { getIO } from "@/lib/socket";
 import FoodListing from "@/models/FoodListing";
 import OTP, { MAX_OTP_ATTEMPTS, OTP_TTL_MS, type OTPType } from "@/models/OTP";
+import User from "@/models/User";
 import VolunteerTask from "@/models/VolunteerTask";
+import WalletTransaction from "@/models/WalletTransaction";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -127,6 +129,101 @@ export async function createOTP(listingId: string, type: OTPType): Promise<void>
     });
   } catch (err) {
     console.error("[otp/createOTP] Failed:", err);
+  }
+}
+
+// ── Wallet settlement ─────────────────────────────────────────────────────────
+
+interface SettleWalletParams {
+  ngoId: string;
+  volunteerId: string;
+  payoutAmount: number;
+  listingId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  io: any;
+}
+
+/**
+ * Atomically deduct payoutAmount from the NGO's wallet and credit it to the
+ * volunteer's wallet. Creates a WalletTransaction record for each party.
+ * Runs inside a MongoDB session so both updates succeed or both roll back.
+ * Non-throwing — errors are logged but do not fail the delivery confirmation.
+ */
+async function settleWallet({ ngoId, volunteerId, payoutAmount, listingId, io }: SettleWalletParams): Promise<void> {
+  try {
+    const session = await mongoose.startSession();
+
+    await session.withTransaction(async () => {
+      const ngoObjectId  = new Types.ObjectId(ngoId);
+      const volObjectId  = new Types.ObjectId(volunteerId);
+      const listingObjId = new Types.ObjectId(listingId);
+
+      // Deduct from NGO
+      const ngo = await User.findOneAndUpdate(
+        { _id: ngoObjectId, walletBalance: { $gte: payoutAmount } },
+        { $inc: { walletBalance: -payoutAmount } },
+        { new: true, session },
+      );
+
+      if (!ngo) {
+        // Insufficient balance — still settle but flag it (don't block delivery)
+        // Log a zero-balance transaction so the NGO sees the debt
+        const ngoDoc = await User.findById(ngoObjectId).session(session).lean();
+        const currentBalance = (ngoDoc?.walletBalance as number | undefined) ?? 0;
+        await WalletTransaction.create(
+          [{ userId: ngoObjectId, amount: -payoutAmount, type: "delivery_debit", listingId: listingObjId,
+             description: `Delivery payout to volunteer (insufficient balance — ₹${payoutAmount} overdue)`,
+             balanceAfter: currentBalance - payoutAmount }],
+          { session },
+        );
+      } else {
+        await WalletTransaction.create(
+          [{ userId: ngoObjectId, amount: -payoutAmount, type: "delivery_debit", listingId: listingObjId,
+             description: `Delivery payout for listing ${listingId}`, balanceAfter: ngo.walletBalance }],
+          { session },
+        );
+      }
+
+      // Credit volunteer
+      const vol = await User.findByIdAndUpdate(
+        volObjectId,
+        { $inc: { walletBalance: payoutAmount } },
+        { new: true, session },
+      );
+
+      if (vol) {
+        await WalletTransaction.create(
+          [{ userId: volObjectId, amount: payoutAmount, type: "delivery_credit", listingId: listingObjId,
+             description: `Delivery earnings for listing ${listingId}`, balanceAfter: vol.walletBalance }],
+          { session },
+        );
+      }
+    });
+
+    await session.endSession();
+
+    // Notify both parties in real-time
+    if (io) {
+      io.to(ngoId).emit("wallet_update", { type: "debit",  amount: payoutAmount });
+      io.to(volunteerId).emit("wallet_update", { type: "credit", amount: payoutAmount });
+    }
+
+    void Promise.all([
+      sendNotification({
+        userId: ngoId,
+        type: "wallet_debit",
+        message: `₹${payoutAmount} deducted from your wallet for delivery payout.`,
+        listingId,
+      }),
+      sendNotification({
+        userId: volunteerId,
+        type: "wallet_credit",
+        message: `₹${payoutAmount} credited to your wallet for completed delivery!`,
+        listingId,
+      }),
+    ]);
+  } catch (err) {
+    console.error("[otp/settleWallet] Failed:", err);
   }
 }
 
@@ -299,6 +396,17 @@ export async function verifyAndAdvance(
   // ── 11. Auto-generate delivery OTP after pickup ────────────────────────────
   if (type === "pickup") {
     void createOTP(listingId, "delivery");
+  }
+
+  // ── 12. Wallet settlement on delivery ─────────────────────────────────────
+  if (type === "delivery" && ngoId && listing.payoutAmount) {
+    void settleWallet({
+      ngoId,
+      volunteerId,
+      payoutAmount: listing.payoutAmount,
+      listingId,
+      io: getIO(),
+    });
   }
 
   return { ok: true, newStatus };

@@ -119,6 +119,37 @@ export default function NgoClaimsClient() {
   const [eventsMap, setEventsMap] = useState<Record<string, ActivityEvent[]>>({});
   const { socketRef } = useSocket();
 
+  // ── OTP fetch ──────────────────────────────────────────────────────────────
+
+  const fetchOTP = useCallback(async (listingId: string) => {
+    setOtpMap((prev) => ({ ...prev, [listingId]: { code: null, loading: true } }));
+    try {
+      // 1. Try reading an existing OTP
+      const res = await fetch(`/api/otp/view?listingId=${listingId}&type=delivery`);
+      const data = (await res.json()) as { code?: string | null; minutesLeft?: number; error?: string };
+
+      if (res.ok && data.code) {
+        setOtpMap((prev) => ({ ...prev, [listingId]: { code: data.code!, minutesLeft: data.minutesLeft, loading: false } }));
+        return;
+      }
+
+      // 2. OTP missing or error — request generation from the server
+      const genRes = await fetch("/api/otp/request-delivery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId }),
+      });
+      const genData = (await genRes.json()) as { code?: string; minutesLeft?: number; error?: string };
+
+      setOtpMap((prev) => ({
+        ...prev,
+        [listingId]: { code: genData.code ?? null, minutesLeft: genData.minutesLeft, loading: false },
+      }));
+    } catch {
+      setOtpMap((prev) => ({ ...prev, [listingId]: { code: null, loading: false } }));
+    }
+  }, []);
+
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
   const fetchClaims = useCallback(async () => {
@@ -132,10 +163,16 @@ export default function NgoClaimsClient() {
       const map: Record<string, ActivityEvent[]> = {};
       for (const l of listings) map[l._id] = buildEvents(l);
       setEventsMap(map);
+      // Auto-fetch delivery OTP for any listing already in picked_up state
+      for (const l of listings) {
+        if (l.status === "picked_up") {
+          void fetchOTP(l._id);
+        }
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchOTP]);
 
   useEffect(() => { void fetchClaims(); }, [fetchClaims]);
 
@@ -232,27 +269,24 @@ export default function NgoClaimsClient() {
       }
     }
 
+    function onOtpGenerated(payload: { listingId: string; type: string; code: string; minutesValid: number }) {
+      if (payload.type !== "delivery") return;
+      setOtpMap((prev) => ({
+        ...prev,
+        [payload.listingId]: { code: payload.code, minutesLeft: payload.minutesValid, loading: false },
+      }));
+    }
+
     socket.on("volunteer_confirmed", onVolunteerConfirmed);
     socket.on("listing_status", onListingStatus);
+    socket.on("otp_generated", onOtpGenerated);
 
     return () => {
       socket.off("volunteer_confirmed", onVolunteerConfirmed);
       socket.off("listing_status", onListingStatus);
+      socket.off("otp_generated", onOtpGenerated);
     };
-  }, [socketRef]);
-
-  // ── OTP fetch ──────────────────────────────────────────────────────────────
-
-  async function fetchOTP(listingId: string) {
-    setOtpMap((prev) => ({ ...prev, [listingId]: { code: null, loading: true } }));
-    try {
-      const res = await fetch(`/api/otp/view?listingId=${listingId}&type=delivery`);
-      const data = (await res.json()) as { code?: string | null; minutesLeft?: number };
-      setOtpMap((prev) => ({ ...prev, [listingId]: { code: data.code ?? null, minutesLeft: data.minutesLeft, loading: false } }));
-    } catch {
-      setOtpMap((prev) => ({ ...prev, [listingId]: { code: null, loading: false } }));
-    }
-  }
+  }, [socketRef, fetchOTP]);
 
   const active = claims.filter((c) => c.status !== "delivered" && c.status !== "expired");
   const completed = claims.filter((c) => c.status === "delivered");

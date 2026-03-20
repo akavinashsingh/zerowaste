@@ -21,6 +21,8 @@ export interface IUser extends Document {
   rating?: number;
   /** Volunteer only: whether they are currently available for task assignment */
   isAvailable?: boolean;
+  /** Wallet balance in INR — NGO pays, volunteer receives */
+  walletBalance: number;
   createdAt: Date;
 }
 
@@ -39,6 +41,7 @@ const UserSchema = new Schema<IUser>({
   pricePerKm: { type: Number, min: 1, max: 200, default: 10 },
   rating: { type: Number, min: 0, max: 5, default: 0 },
   isAvailable: { type: Boolean, default: true },
+  walletBalance: { type: Number, default: 0, min: 0 },
   createdAt: { type: Date, default: Date.now },
 });
 

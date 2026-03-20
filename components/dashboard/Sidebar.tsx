@@ -9,8 +9,10 @@ import {
   LayoutDashboard, ListChecks, Package, Users, Settings,
   LogOut, ChevronRight, Sparkles, MapPin, Bell,
   Truck, HandHeart, ShieldCheck, BarChart3, Menu, X,
-  ClipboardList, UserCircle2
+  ClipboardList, UserCircle2, Wallet
 } from "lucide-react";
+
+import OtpPopup from "@/components/OtpPopup";
 
 type Role = "donor" | "ngo" | "volunteer" | "admin";
 
@@ -53,6 +55,7 @@ function getNav(role: Role): NavGroup[] {
           { label: "Dashboard", href: base, icon: <LayoutDashboard size={17} /> },
           { label: "Browse Food", href: `${base}/browse`, icon: <ListChecks size={17} /> },
           { label: "My Claims", href: `${base}/claims`, icon: <ClipboardList size={17} /> },
+          { label: "Wallet", href: `${base}/wallet`, icon: <Wallet size={17} /> },
           { label: "Predicted Surplus", href: `${base}/predictions`, icon: <Sparkles size={17} />, highlight: true },
           { label: "Live Map", href: `${base}/map`, icon: <MapPin size={17} /> },
         ],
@@ -347,6 +350,7 @@ export function DashboardLayout({
       <div className="sb-page-wrap">
         {children}
       </div>
+      <OtpPopup />
     </>
   );
 }

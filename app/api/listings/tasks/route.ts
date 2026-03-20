@@ -51,9 +51,17 @@ export async function GET(request: Request) {
       }
     }
 
+    const claimedByNorm = claimedBy
+      ? {
+          ...(claimedBy as object),
+          location: normalizeLocation(claimedBy.location),
+        }
+      : task.claimedBy;
+
     return {
       ...task,
       location: normalLoc ?? { lat: 0, lng: 0, address: "" },
+      claimedBy: claimedByNorm,
       distanceToPickup,
       distanceToDrop,
     };

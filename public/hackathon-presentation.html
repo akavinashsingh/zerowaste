@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ZeroWaste — NYXORA MREM 2k26 Hackathon</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: #e8ecf0; }
+
+  .controls {
+    position: fixed; top: 16px; right: 16px; z-index: 999;
+    display: flex; gap: 8px;
+  }
+  .controls button {
+    padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+    font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600;
+  }
+  .btn-print { background: #1e3a5f; color: white; }
+  .btn-prev, .btn-next { background: white; color: #1e3a5f; border: 2px solid #1e3a5f; }
+  .slide-counter { padding: 8px 14px; background: white; border-radius: 8px; font-size: 0.8rem; font-weight: 600; color: #1e3a5f; border: 2px solid #1e3a5f; }
+
+  /* ── Slide shell ── */
+  .slide {
+    width: 960px; min-height: 540px; margin: 24px auto;
+    background: white; position: relative; display: none;
+    overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  }
+  .slide.active { display: flex; flex-direction: column; }
+
+  /* Header strip */
+  .slide-header {
+    background: linear-gradient(135deg, #dceeff 0%, #eaf4ff 50%, #f0f8ff 100%);
+    padding: 18px 32px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid rgba(30,58,95,0.08);
+  }
+  .logo-block { display: flex; align-items: center; gap: 10px; }
+  .logo-circle {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: linear-gradient(135deg, #f59e0b, #dc2626, #1e3a8a);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.55rem; font-weight: 800; color: white; text-align: center;
+    line-height: 1.2; padding: 4px;
+  }
+  .logo-text { font-size: 0.72rem; font-weight: 700; color: #1e3a5f; line-height: 1.4; }
+  .logo-sub { font-size: 0.6rem; font-weight: 400; color: #4a6a8f; }
+  .slide-num { font-size: 0.65rem; color: #7090b0; font-weight: 500; }
+
+  /* Body */
+  .slide-body { flex: 1; padding: 28px 36px; }
+
+  /* Footer bar */
+  .slide-footer {
+    height: 10px;
+    background: linear-gradient(90deg, #f59e0b 0%, #ef4444 50%, #f97316 100%);
+  }
+
+  /* ── Title slide ── */
+  .title-slide .slide-body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 40px;
+  }
+  .project-badge {
+    display: inline-block; padding: 5px 16px; border-radius: 100px;
+    background: #16a34a; color: white; font-size: 0.7rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 20px;
+  }
+  .title-slide h1 {
+    font-size: 3rem; font-weight: 900; color: #0f172a; letter-spacing: -0.04em;
+    line-height: 1.05; margin-bottom: 12px;
+  }
+  .title-slide h1 span { color: #16a34a; }
+  .title-tagline { font-size: 1rem; color: #475569; font-weight: 400; margin-bottom: 32px; max-width: 520px; }
+  .title-meta { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+  .meta-chip {
+    display: flex; align-items: center; gap: 8px; padding: 10px 18px;
+    border-radius: 12px; border: 1.5px solid rgba(30,58,95,0.12);
+    font-size: 0.78rem; font-weight: 600; color: #1e3a5f;
+  }
+  .meta-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* ── Slide headings ── */
+  .slide-title {
+    font-size: 1.45rem; font-weight: 800; color: #0f172a; margin-bottom: 20px;
+    letter-spacing: -0.02em; position: relative; padding-left: 14px;
+  }
+  .slide-title::before {
+    content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 5px; height: 70%; border-radius: 3px;
+    background: linear-gradient(#f59e0b, #ef4444);
+  }
+
+  /* ── Two-col grid ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  /* ── Card ── */
+  .card {
+    background: #f8fafc; border: 1.5px solid rgba(30,58,95,0.08);
+    border-radius: 14px; padding: 16px 18px;
+  }
+  .card-icon { font-size: 1.4rem; margin-bottom: 8px; }
+  .card-title { font-size: 0.82rem; font-weight: 700; color: #0f172a; margin-bottom: 5px; }
+  .card-body { font-size: 0.72rem; color: #475569; line-height: 1.55; }
+
+  /* ── List ── */
+  ul.styled { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  ul.styled li {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 0.8rem; color: #334155; line-height: 1.5;
+  }
+  ul.styled li::before {
+    content: '→'; color: #16a34a; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+  }
+  ul.styled li strong { color: #0f172a; }
+
+  /* ── Flow diagram ── */
+  .flow { display: flex; align-items: center; gap: 0; flex-wrap: wrap; margin: 10px 0; }
+  .flow-node {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    text-align: center; min-width: 110px;
+  }
+  .flow-icon {
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem; border: 2px solid rgba(30,58,95,0.12);
+  }
+  .flow-label { font-size: 0.65rem; font-weight: 600; color: #334155; line-height: 1.35; }
+  .flow-arrow { font-size: 1.2rem; color: #94a3b8; margin: 0 2px; padding-bottom: 24px; }
+  .flow-sub { font-size: 0.58rem; color: #94a3b8; margin-top: -4px; }
+
+  /* ── Tech stack ── */
+  .tech-group { margin-bottom: 16px; }
+  .tech-group-title { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #94a3b8; margin-bottom: 8px; }
+  .tech-pills { display: flex; flex-wrap: wrap; gap: 7px; }
+  .tech-pill {
+    padding: 5px 12px; border-radius: 100px; font-size: 0.72rem; font-weight: 600;
+    border: 1.5px solid;
+  }
+
+  /* ── Timeline ── */
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .tl-row { display: flex; gap: 14px; align-items: flex-start; padding-bottom: 14px; position: relative; }
+  .tl-row:not(:last-child)::before { content: ''; position: absolute; left: 15px; top: 32px; bottom: 0; width: 2px; background: rgba(30,58,95,0.1); }
+  .tl-dot { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; border: 2px solid; }
+  .tl-body { flex: 1; padding-top: 4px; }
+  .tl-title { font-size: 0.82rem; font-weight: 700; color: #0f172a; }
+  .tl-desc { font-size: 0.7rem; color: #64748b; margin-top: 2px; line-height: 1.45; }
+
+  /* ── Arch boxes ── */
+  .arch { display: flex; flex-direction: column; gap: 10px; }
+  .arch-layer {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 12px; border: 1.5px solid;
+  }
+  .arch-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; min-width: 90px; }
+  .arch-items { display: flex; flex-wrap: wrap; gap: 6px; }
+  .arch-item { font-size: 0.7rem; font-weight: 600; padding: 3px 9px; border-radius: 6px; }
+
+  /* ── Feature grid ── */
+  .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .feature-card {
+    border-radius: 12px; padding: 13px 14px;
+    border: 1.5px solid rgba(30,58,95,0.08);
+  }
+  .feature-card .icon { font-size: 1.2rem; margin-bottom: 6px; }
+  .feature-card .name { font-size: 0.76rem; font-weight: 700; color: #0f172a; margin-bottom: 3px; }
+  .feature-card .desc { font-size: 0.65rem; color: #64748b; line-height: 1.45; }
+
+  /* ── Cost table ── */
+  table.cost { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  table.cost th { background: #f1f5f9; padding: 9px 12px; text-align: left; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; }
+  table.cost td { padding: 9px 12px; border-top: 1px solid rgba(30,58,95,0.07); color: #334155; }
+  table.cost td.free { color: #16a34a; font-weight: 700; }
+  table.cost tfoot td { background: #f8fafc; font-weight: 700; color: #0f172a; border-top: 2px solid rgba(30,58,95,0.12); }
+
+  /* ── Use-case boxes ── */
+  .usecase-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .actor-box { border-radius: 14px; padding: 14px; }
+  .actor-title { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+  .actor-actions { display: flex; flex-direction: column; gap: 5px; }
+  .actor-action { font-size: 0.68rem; padding: 4px 9px; border-radius: 6px; font-weight: 500; }
+
+  /* ── Future ── */
+  .future-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+  .future-item { display: flex; gap: 12px; align-items: flex-start; }
+  .future-num { width: 26px; height: 26px; border-radius: 50%; background: #eff6ff; border: 1.5px solid #bfdbfe; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 800; color: #1e40af; flex-shrink: 0; }
+  .future-body .title { font-size: 0.78rem; font-weight: 700; color: #0f172a; }
+  .future-body .desc { font-size: 0.68rem; color: #64748b; margin-top: 2px; line-height: 1.4; }
+
+  @media print {
+    body { background: white; }
+    .controls { display: none; }
+    .slide { display: flex !important; page-break-after: always; margin: 0; box-shadow: none; width: 100%; min-height: 100vh; }
+    .slide:last-child { page-break-after: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="btn-prev" onclick="changeSlide(-1)">← Prev</button>
+  <span class="slide-counter" id="counter">1 / 12</span>
+  <button class="btn-next" onclick="changeSlide(1)">Next →</button>
+  <button class="btn-print" onclick="window.print()">⬇ PDF</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 1 — TITLE -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide title-slide active" id="s1">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div>
+        <div class="logo-text">MREM Engineering College</div>
+        <div class="logo-sub">NYXORA — National Hackathon 2026</div>
+      </div>
+    </div>
+    <div class="slide-num">Slide 1 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="project-badge">Team Error 404</div>
+    <h1>Zero<span>Waste</span></h1>
+    <p class="title-tagline">AI-powered surplus food redistribution platform connecting restaurants, NGOs and volunteers in real-time</p>
+    <div class="title-meta">
+      <div class="meta-chip"><div class="dot" style="background:#16a34a"></div>Donors — Restaurants &amp; Hotels</div>
+      <div class="meta-chip"><div class="dot" style="background:#3b82f6"></div>NGOs — Food Banks &amp; Trusts</div>
+      <div class="meta-chip"><div class="dot" style="background:#f59e0b"></div>Volunteers — Last-mile Delivery</div>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 2 — TEAM DETAILS -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s2">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div>
+        <div class="logo-text">MREM Engineering College</div>
+        <div class="logo-sub">NYXORA — National Hackathon 2026</div>
+      </div>
+    </div>
+    <div class="slide-num">Slide 2 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">Team Details</div>
+    <div class="two-col" style="gap:28px; align-items:start;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:10px;">a. Team Name</div>
+          <div style="font-size:2rem; font-weight:900; color:#0f172a; letter-spacing:-0.04em;">Error 404</div>
+          <div style="font-size:0.72rem; color:#64748b; margin-top:4px;">Not Found — until now.</div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:8px;">b. Project Title</div>
+          <div style="font-size:1.1rem; font-weight:800; color:#0f172a; letter-spacing:-0.02em;">ZeroWaste</div>
+          <div style="font-size:0.72rem; color:#16a34a; font-weight:600; margin-top:3px;">AI-Powered Surplus Food Redistribution Platform</div>
+        </div>
+      </div>
+      <div class="card" style="height:100%;">
+        <div class="card-title" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:12px;">c. Problem Statement</div>
+        <div style="font-size:0.82rem; color:#334155; line-height:1.65; font-weight:400;">
+          Every day, <strong style="color:#ef4444;">40% of food produced</strong> in India is wasted — mostly by restaurants, hotels, and catering businesses — while <strong style="color:#ef4444;">189 million people</strong> go to sleep hungry.
+          <br/><br/>
+          There is no efficient, accountable, real-time system to bridge this gap. Existing solutions rely on phone calls, manual coordination and have no delivery accountability.
+          <br/><br/>
+          The result: edible food rots in kitchens while people starve within kilometers.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 3 — BRIEF ABOUT SOLUTION -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s3">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div><div class="logo-text">MREM Engineering College</div><div class="logo-sub">NYXORA — National Hackathon 2026</div></div>
+    </div>
+    <div class="slide-num">Slide 3 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">Brief About Our Solution</div>
+    <div style="font-size:0.83rem; color:#475569; margin-bottom:18px; line-height:1.6; max-width:760px;">
+      ZeroWaste is a <strong style="color:#0f172a;">multi-role real-time web platform</strong> that digitises the full food donation lifecycle — from a restaurant posting surplus food, to an NGO claiming it, to a volunteer delivering it with OTP-verified accountability.
+    </div>
+    <div class="three-col">
+      <div class="card" style="border-top:3px solid #16a34a;">
+        <div class="card-icon">🍱</div>
+        <div class="card-title">Donor Portal</div>
+        <div class="card-body">Restaurants, hotels and caterers post surplus food listings with geo-location, expiry time and food details. Auto-fill address from registered profile or live GPS.</div>
+      </div>
+      <div class="card" style="border-top:3px solid #3b82f6;">
+        <div class="card-icon">🏢</div>
+        <div class="card-title">NGO Dashboard</div>
+        <div class="card-body">NGOs browse and instantly claim listings. Real-time live tracker shows volunteer status, ETA, and auto-generates a delivery OTP when food is picked up.</div>
+      </div>
+      <div class="card" style="border-top:3px solid #f59e0b;">
+        <div class="card-icon">🏍️</div>
+        <div class="card-title">Volunteer App</div>
+        <div class="card-body">Volunteers see available tasks sorted by distance. Accept tasks, view route map, verify pickup via donor OTP, confirm delivery via NGO OTP — and earn automatically.</div>
+      </div>
+    </div>
+    <div style="margin-top:14px; padding:12px 16px; background:#f0fdf4; border-radius:12px; border:1.5px solid rgba(22,163,74,0.2); font-size:0.75rem; color:#15803d; display:flex; align-items:center; gap:10px;">
+      <span style="font-size:1.2rem;">💡</span>
+      <span><strong>Key innovation:</strong> OTP-gated verification at both pickup and delivery creates an auditable, tamper-proof chain of custody. Wallet payouts are automatic on confirmed delivery — no manual processing.</span>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 4 — OPPORTUNITIES / USP -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div><div class="logo-text">MREM Engineering College</div><div class="logo-sub">NYXORA — National Hackathon 2026</div></div>
+    </div>
+    <div class="slide-num">Slide 4 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">Opportunities &amp; USP</div>
+    <div class="two-col">
+      <div>
+        <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:10px;">a. How is it different?</div>
+        <ul class="styled">
+          <li><strong>vs. Zomato/Swiggy:</strong> Purely commercial — no mechanism for food donation at all.</li>
+          <li><strong>vs. Manual drives (Robin Hood Army):</strong> Phone/WhatsApp based. No real-time tracking, no accountability, no automated payouts.</li>
+          <li><strong>vs. Food banks:</strong> Static drop-off model. No last-mile delivery. Relies on donors to physically travel.</li>
+          <li><strong>ZeroWaste:</strong> End-to-end digital pipeline. Auto-assigns nearest volunteer. OTP-verified. Real-time for all 3 parties simultaneously.</li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:10px;">b. How does it solve the problem?</div>
+        <ul class="styled" style="margin-bottom:14px;">
+          <li>Reduces friction from minutes of calls to one click.</li>
+          <li>Auto-matches volunteers by proximity — food stays fresh.</li>
+          <li>OTP chain prevents false delivery claims.</li>
+          <li>Financial incentive keeps volunteer supply healthy.</li>
+        </ul>
+        <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:10px;">c. USP</div>
+        <div style="display:flex; flex-wrap:wrap; gap:7px;">
+          <span style="padding:5px 11px; background:#f0fdf4; border:1.5px solid rgba(22,163,74,0.25); border-radius:100px; font-size:0.68rem; font-weight:600; color:#15803d;">🔐 Dual OTP Verification</span>
+          <span style="padding:5px 11px; background:#eff6ff; border:1.5px solid rgba(59,130,246,0.25); border-radius:100px; font-size:0.68rem; font-weight:600; color:#1e40af;">📡 Real-time Live Tracker</span>
+          <span style="padding:5px 11px; background:#fff7ed; border:1.5px solid rgba(249,115,22,0.25); border-radius:100px; font-size:0.68rem; font-weight:600; color:#c2410c;">💰 Auto Wallet Payout</span>
+          <span style="padding:5px 11px; background:#fdf4ff; border:1.5px solid rgba(168,85,247,0.25); border-radius:100px; font-size:0.68rem; font-weight:600; color:#7e22ce;">🤖 AI Demand Forecast</span>
+          <span style="padding:5px 11px; background:#f0fdf4; border:1.5px solid rgba(22,163,74,0.25); border-radius:100px; font-size:0.68rem; font-weight:600; color:#15803d;">🗺️ Route Map + ETA</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 5 — FEATURES -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s5">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div><div class="logo-text">MREM Engineering College</div><div class="logo-sub">NYXORA — National Hackathon 2026</div></div>
+    </div>
+    <div class="slide-num">Slide 5 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">Features Offered</div>
+    <div class="feature-grid">
+      <div class="feature-card" style="background:#f0fdf4; border-color:rgba(22,163,74,0.2);">
+        <div class="icon">📍</div>
+        <div class="name">Geo-Location Food Posting</div>
+        <div class="desc">Donors post listings with live GPS or registered address. Distance shown to volunteers in real-time.</div>
+      </div>
+      <div class="feature-card" style="background:#eff6ff; border-color:rgba(59,130,246,0.2);">
+        <div class="icon">⚡</div>
+        <div class="name">Auto Volunteer Assignment</div>
+        <div class="desc">System auto-finds the nearest available volunteer when an NGO claims a listing.</div>
+      </div>
+      <div class="feature-card" style="background:#fff7ed; border-color:rgba(249,115,22,0.2);">
+        <div class="icon">🔐</div>
+        <div class="name">Dual OTP Verification</div>
+        <div class="desc">Pickup OTP → donor. Delivery OTP → NGO. Volunteer must enter both to advance status.</div>
+      </div>
+      <div class="feature-card" style="background:#fdf4ff; border-color:rgba(168,85,247,0.2);">
+        <div class="icon">📡</div>
+        <div class="name">Real-time NGO Tracker</div>
+        <div class="desc">Live updates via Socket.IO: volunteer assigned → picked up → en route → delivered. With ETA.</div>
+      </div>
+      <div class="feature-card" style="background:#f0fdf4; border-color:rgba(22,163,74,0.2);">
+        <div class="icon">💳</div>
+        <div class="name">Wallet System</div>
+        <div class="desc">NGO pre-funded wallet. On delivery, payout auto-debits NGO and credits volunteer. Full audit trail.</div>
+      </div>
+      <div class="feature-card" style="background:#eff6ff; border-color:rgba(59,130,246,0.2);">
+        <div class="icon">🗺️</div>
+        <div class="name">Route Map + ETA</div>
+        <div class="desc">Interactive OpenStreetMap with pickup/drop-off pins. Distance and ETA calculated (Haversine).</div>
+      </div>
+      <div class="feature-card" style="background:#fff7ed; border-color:rgba(249,115,22,0.2);">
+        <div class="icon">🤖</div>
+        <div class="name">AI Demand Forecasting</div>
+        <div class="desc">Predicts surplus food days, meal estimates, and peak times from historical listing data.</div>
+      </div>
+      <div class="feature-card" style="background:#fdf4ff; border-color:rgba(168,85,247,0.2);">
+        <div class="icon">🔔</div>
+        <div class="name">Real-time Notifications</div>
+        <div class="desc">In-app notification bell with socket events. OTP popup appears on any dashboard page automatically.</div>
+      </div>
+      <div class="feature-card" style="background:#f0fdf4; border-color:rgba(22,163,74,0.2);">
+        <div class="icon">📊</div>
+        <div class="name">Role-based Dashboards</div>
+        <div class="desc">Fully separate UX for Donor, NGO and Volunteer with analytics, earnings, history and stats.</div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 6 — PROCESS FLOW / USE CASE -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s6">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div><div class="logo-text">MREM Engineering College</div><div class="logo-sub">NYXORA — National Hackathon 2026</div></div>
+    </div>
+    <div class="slide-num">Slide 6 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">Process Flow &amp; Use Cases</div>
+    <div class="flow" style="justify-content:center; margin-bottom:20px;">
+      <div class="flow-node">
+        <div class="flow-icon" style="background:#f0fdf4; border-color:rgba(22,163,74,0.3);">🍱</div>
+        <div class="flow-label">Donor<br/>Posts Food</div>
+        <div class="flow-sub">+ location, expiry</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-icon" style="background:#eff6ff; border-color:rgba(59,130,246,0.3);">🏢</div>
+        <div class="flow-label">NGO<br/>Claims</div>
+        <div class="flow-sub">real-time browse</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-icon" style="background:#fff7ed; border-color:rgba(249,115,22,0.3);">⚡</div>
+        <div class="flow-label">Auto Volunteer<br/>Assigned</div>
+        <div class="flow-sub">nearest available</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-icon" style="background:#f0fdf4; border-color:rgba(22,163,74,0.3);">🔐</div>
+        <div class="flow-label">Pickup OTP<br/>Verified</div>
+        <div class="flow-sub">donor shows code</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-icon" style="background:#fdf4ff; border-color:rgba(168,85,247,0.3);">🚚</div>
+        <div class="flow-label">En Route<br/>to NGO</div>
+        <div class="flow-sub">live tracking</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-icon" style="background:#eff6ff; border-color:rgba(59,130,246,0.3);">🔑</div>
+        <div class="flow-label">Delivery OTP<br/>Verified</div>
+        <div class="flow-sub">NGO shows code</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-icon" style="background:#f0fdf4; border-color:rgba(22,163,74,0.3);">💰</div>
+        <div class="flow-label">Auto Wallet<br/>Settlement</div>
+        <div class="flow-sub">instant payout</div>
+      </div>
+    </div>
+    <div class="usecase-grid">
+      <div class="actor-box" style="background:#f0fdf4; border:1.5px solid rgba(22,163,74,0.2);">
+        <div class="actor-title" style="color:#15803d;">🍱 Donor</div>
+        <div class="actor-actions">
+          <div class="actor-action" style="background:rgba(22,163,74,0.1); color:#15803d;">Register &amp; set location</div>
+          <div class="actor-action" style="background:rgba(22,163,74,0.1); color:#15803d;">Post food listing</div>
+          <div class="actor-action" style="background:rgba(22,163,74,0.1); color:#15803d;">Show Pickup OTP to volunteer</div>
+          <div class="actor-action" style="background:rgba(22,163,74,0.1); color:#15803d;">View delivery history</div>
+        </div>
+      </div>
+      <div class="actor-box" style="background:#eff6ff; border:1.5px solid rgba(59,130,246,0.2);">
+        <div class="actor-title" style="color:#1e40af;">🏢 NGO</div>
+        <div class="actor-actions">
+          <div class="actor-action" style="background:rgba(59,130,246,0.1); color:#1e40af;">Browse &amp; claim listings</div>
+          <div class="actor-action" style="background:rgba(59,130,246,0.1); color:#1e40af;">Track volunteer in real-time</div>
+          <div class="actor-action" style="background:rgba(59,130,246,0.1); color:#1e40af;">Show Delivery OTP to volunteer</div>
+          <div class="actor-action" style="background:rgba(59,130,246,0.1); color:#1e40af;">Manage wallet &amp; transactions</div>
+        </div>
+      </div>
+      <div class="actor-box" style="background:#fff7ed; border:1.5px solid rgba(249,115,22,0.2);">
+        <div class="actor-title" style="color:#c2410c;">🏍️ Volunteer</div>
+        <div class="actor-actions">
+          <div class="actor-action" style="background:rgba(249,115,22,0.1); color:#c2410c;">Browse tasks by distance</div>
+          <div class="actor-action" style="background:rgba(249,115,22,0.1); color:#c2410c;">Accept &amp; view route map</div>
+          <div class="actor-action" style="background:rgba(249,115,22,0.1); color:#c2410c;">Enter pickup &amp; delivery OTPs</div>
+          <div class="actor-action" style="background:rgba(249,115,22,0.1); color:#c2410c;">Receive payout in wallet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 7 — WIREFRAMES -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s7">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div><div class="logo-text">MREM Engineering College</div><div class="logo-sub">NYXORA — National Hackathon 2026</div></div>
+    </div>
+    <div class="slide-num">Slide 7 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">Key Screen Flows (Wireframes)</div>
+    <div class="three-col" style="gap:14px;">
+      <!-- Donor screen -->
+      <div style="border:1.5px solid rgba(22,163,74,0.2); border-radius:14px; overflow:hidden;">
+        <div style="background:#16a34a; padding:8px 12px; font-size:0.65rem; font-weight:700; color:white; text-transform:uppercase; letter-spacing:0.1em;">Donor Dashboard</div>
+        <div style="padding:10px 12px; display:flex; flex-direction:column; gap:7px;">
+          <div style="background:#f0fdf4; border-radius:8px; padding:8px 10px; font-size:0.65rem; color:#15803d; font-weight:600;">📊 Stats: 3 active · 12 delivered</div>
+          <div style="background:#f8fafc; border-radius:8px; padding:8px 10px; border:1px solid rgba(30,58,95,0.08);">
+            <div style="font-size:0.62rem; font-weight:700; color:#94a3b8; margin-bottom:4px;">ACTIVE LISTING</div>
+            <div style="font-size:0.72rem; font-weight:600; color:#0f172a;">Biryani — 10 kg · Expires 3h</div>
+            <div style="font-size:0.62rem; color:#64748b;">📍 Hotel Saraswathi, Medchal</div>
+            <div style="margin-top:6px; display:flex; gap:5px;">
+              <span style="padding:2px 7px; background:#e0f2fe; border-radius:100px; font-size:0.6rem; font-weight:600; color:#0369a1;">Claimed</span>
+              <span style="padding:2px 7px; background:#f0fdf4; border-radius:100px; font-size:0.6rem; font-weight:600; color:#15803d; cursor:pointer;">Show OTP</span>
+            </div>
+          </div>
+          <div style="background:#16a34a; border-radius:8px; padding:7px 10px; font-size:0.68rem; font-weight:700; color:white; text-align:center;">+ Post Food</div>
+        </div>
+      </div>
+
+      <!-- NGO screen -->
+      <div style="border:1.5px solid rgba(59,130,246,0.2); border-radius:14px; overflow:hidden;">
+        <div style="background:#3b82f6; padding:8px 12px; font-size:0.65rem; font-weight:700; color:white; text-transform:uppercase; letter-spacing:0.1em;">NGO — My Claims</div>
+        <div style="padding:10px 12px; display:flex; flex-direction:column; gap:7px;">
+          <div style="background:#f8fafc; border-radius:8px; padding:8px 10px; border:1px solid rgba(30,58,95,0.08);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span style="font-size:0.72rem; font-weight:700; color:#0f172a;">Fried Rice</span>
+              <span style="padding:2px 7px; background:#dbeafe; border-radius:100px; font-size:0.6rem; font-weight:600; color:#1e40af;">Picked Up</span>
+            </div>
+            <div style="font-size:0.62rem; color:#64748b; margin-bottom:5px;">🏍️ Prakash Reddy · 9100003001</div>
+            <div style="background:#eff6ff; border-radius:7px; padding:5px 8px; font-size:0.62rem; color:#1e40af;">⚡ LIVE · ETA ~8 min</div>
+            <div style="background:#f0fdf4; border-radius:7px; padding:5px 8px; margin-top:4px; font-size:0.62rem; color:#15803d; font-weight:600;">🔑 Delivery OTP: 847291</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Volunteer screen -->
+      <div style="border:1.5px solid rgba(249,115,22,0.2); border-radius:14px; overflow:hidden;">
+        <div style="background:#f97316; padding:8px 12px; font-size:0.65rem; font-weight:700; color:white; text-transform:uppercase; letter-spacing:0.1em;">Volunteer Dashboard</div>
+        <div style="padding:10px 12px; display:flex; flex-direction:column; gap:7px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <div style="background:#f0fdf4; border-radius:8px; padding:7px 8px; text-align:center;">
+              <div style="font-size:0.95rem; font-weight:800; color:#15803d;">3</div>
+              <div style="font-size:0.55rem; color:#64748b;">Available</div>
+            </div>
+            <div style="background:#fff7ed; border-radius:8px; padding:7px 8px; text-align:center;">
+              <div style="font-size:0.95rem; font-weight:800; color:#c2410c;">₹340</div>
+              <div style="font-size:0.55rem; color:#64748b;">Earned</div>
+            </div>
+          </div>
+          <div style="background:#f8fafc; border-radius:8px; padding:8px 10px; border:1px solid rgba(30,58,95,0.08);">
+            <div style="font-size:0.72rem; font-weight:700; color:#0f172a; margin-bottom:3px;">Biryani · Medchal</div>
+            <div style="font-size:0.62rem; color:#64748b; margin-bottom:5px;">~2.1 km · Earn ₹154</div>
+            <div style="background:#f97316; border-radius:7px; padding:5px 8px; font-size:0.65rem; font-weight:700; color:white; text-align:center;">Accept Task</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:14px; padding:10px 14px; background:#f8fafc; border-radius:10px; border:1px solid rgba(30,58,95,0.08); font-size:0.7rem; color:#64748b; text-align:center;">
+      Live prototype running at <strong style="color:#0f172a;">localhost:3000</strong> — see Slide 11 for screenshots
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 8 — ARCHITECTURE -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s8">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div><div class="logo-text">MREM Engineering College</div><div class="logo-sub">NYXORA — National Hackathon 2026</div></div>
+    </div>
+    <div class="slide-num">Slide 8 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">System Architecture</div>
+    <div class="two-col" style="gap:24px; align-items:start;">
+      <div class="arch">
+        <div class="arch-layer" style="background:#f0fdf4; border-color:rgba(22,163,74,0.2);">
+          <div class="arch-label" style="color:#15803d;">Client Layer</div>
+          <div class="arch-items">
+            <span class="arch-item" style="background:rgba(22,163,74,0.1); color:#15803d;">Browser (3 roles)</span>
+            <span class="arch-item" style="background:rgba(22,163,74,0.1); color:#15803d;">React Components</span>
+            <span class="arch-item" style="background:rgba(22,163,74,0.1); color:#15803d;">Socket.IO Client</span>
+          </div>
+        </div>
+        <div style="text-align:center; font-size:1.2rem; color:#94a3b8; margin:2px 0;">↕</div>
+        <div class="arch-layer" style="background:#eff6ff; border-color:rgba(59,130,246,0.2);">
+          <div class="arch-label" style="color:#1e40af;">App Layer</div>
+          <div class="arch-items">
+            <span class="arch-item" style="background:rgba(59,130,246,0.1); color:#1e40af;">Next.js 14 App Router</span>
+            <span class="arch-item" style="background:rgba(59,130,246,0.1); color:#1e40af;">API Routes</span>
+            <span class="arch-item" style="background:rgba(59,130,246,0.1); color:#1e40af;">NextAuth.js</span>
+          </div>
+        </div>
+        <div style="text-align:center; font-size:1.2rem; color:#94a3b8; margin:2px 0;">↕</div>
+        <div class="arch-layer" style="background:#fff7ed; border-color:rgba(249,115,22,0.2);">
+          <div class="arch-label" style="color:#c2410c;">Realtime Layer</div>
+          <div class="arch-items">
+            <span class="arch-item" style="background:rgba(249,115,22,0.1); color:#c2410c;">Socket.IO Server</span>
+            <span class="arch-item" style="background:rgba(249,115,22,0.1); color:#c2410c;">Room-based events</span>
+          </div>
+        </div>
+        <div style="text-align:center; font-size:1.2rem; color:#94a3b8; margin:2px 0;">↕</div>
+        <div class="arch-layer" style="background:#fdf4ff; border-color:rgba(168,85,247,0.2);">
+          <div class="arch-label" style="color:#7e22ce;">Data Layer</div>
+          <div class="arch-items">
+            <span class="arch-item" style="background:rgba(168,85,247,0.1); color:#7e22ce;">MongoDB Atlas</span>
+            <span class="arch-item" style="background:rgba(168,85,247,0.1); color:#7e22ce;">Mongoose ODM</span>
+            <span class="arch-item" style="background:rgba(168,85,247,0.1); color:#7e22ce;">2dsphere Index</span>
+          </div>
+        </div>
+        <div style="text-align:center; font-size:1.2rem; color:#94a3b8; margin:2px 0;">↕</div>
+        <div class="arch-layer" style="background:#f8fafc; border-color:rgba(30,58,95,0.1);">
+          <div class="arch-label" style="color:#475569;">External APIs</div>
+          <div class="arch-items">
+            <span class="arch-item" style="background:#f1f5f9; color:#475569;">Nominatim (geocoding)</span>
+            <span class="arch-item" style="background:#f1f5f9; color:#475569;">OpenStreetMap (tiles)</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:10px;">Key Data Models</div>
+        <div class="timeline">
+          <div class="tl-row">
+            <div class="tl-dot" style="background:#f0fdf4; border-color:rgba(22,163,74,0.3); color:#15803d; font-size:0.6rem;">U</div>
+            <div class="tl-body"><div class="tl-title">User</div><div class="tl-desc">role, location (GeoJSON), walletBalance, phone, address</div></div>
+          </div>
+          <div class="tl-row">
+            <div class="tl-dot" style="background:#eff6ff; border-color:rgba(59,130,246,0.3); color:#1e40af; font-size:0.6rem;">F</div>
+            <div class="tl-body"><div class="tl-title">FoodListing</div><div class="tl-desc">status, foodItems[], donorId, claimedBy, assignedVolunteer, expiresAt, pickedUpAt, deliveredAt</div></div>
+          </div>
+          <div class="tl-row">
+            <div class="tl-dot" style="background:#fff7ed; border-color:rgba(249,115,22,0.3); color:#c2410c; font-size:0.6rem;">O</div>
+            <div class="tl-body"><div class="tl-title">OTP</div><div class="tl-desc">code, type (pickup/delivery), recipientId, expiresAt, isUsed, attemptsLeft</div></div>
+          </div>
+          <div class="tl-row">
+            <div class="tl-dot" style="background:#fdf4ff; border-color:rgba(168,85,247,0.3); color:#7e22ce; font-size:0.6rem;">W</div>
+            <div class="tl-body"><div class="tl-title">WalletTransaction</div><div class="tl-desc">userId, amount, type, listingId, balanceAfter, description</div></div>
+          </div>
+          <div class="tl-row">
+            <div class="tl-dot" style="background:#f8fafc; border-color:rgba(30,58,95,0.2); color:#475569; font-size:0.6rem;">N</div>
+            <div class="tl-body"><div class="tl-title">Notification</div><div class="tl-desc">userId, title, body, read, createdAt</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 9 — TECHNOLOGIES -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s9">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div><div class="logo-text">MREM Engineering College</div><div class="logo-sub">NYXORA — National Hackathon 2026</div></div>
+    </div>
+    <div class="slide-num">Slide 9 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">Technologies Used</div>
+    <div class="two-col" style="gap:24px;">
+      <div>
+        <div class="tech-group">
+          <div class="tech-group-title">Frontend</div>
+          <div class="tech-pills">
+            <span class="tech-pill" style="background:#f0fdf4; border-color:rgba(22,163,74,0.3); color:#15803d;">Next.js 14 (App Router)</span>
+            <span class="tech-pill" style="background:#eff6ff; border-color:rgba(59,130,246,0.3); color:#1e40af;">React 18</span>
+            <span class="tech-pill" style="background:#e0f2fe; border-color:rgba(14,165,233,0.3); color:#0369a1;">Tailwind CSS</span>
+            <span class="tech-pill" style="background:#fdf4ff; border-color:rgba(168,85,247,0.3); color:#7e22ce;">Lucide React (icons)</span>
+            <span class="tech-pill" style="background:#fff7ed; border-color:rgba(249,115,22,0.3); color:#c2410c;">Recharts (analytics)</span>
+          </div>
+        </div>
+        <div class="tech-group">
+          <div class="tech-group-title">Backend / API</div>
+          <div class="tech-pills">
+            <span class="tech-pill" style="background:#f0fdf4; border-color:rgba(22,163,74,0.3); color:#15803d;">Next.js API Routes</span>
+            <span class="tech-pill" style="background:#eff6ff; border-color:rgba(59,130,246,0.3); color:#1e40af;">NextAuth.js (JWT)</span>
+            <span class="tech-pill" style="background:#f8fafc; border-color:rgba(30,58,95,0.15); color:#334155;">TypeScript</span>
+          </div>
+        </div>
+        <div class="tech-group">
+          <div class="tech-group-title">Real-time Communication</div>
+          <div class="tech-pills">
+            <span class="tech-pill" style="background:#fff7ed; border-color:rgba(249,115,22,0.3); color:#c2410c;">Socket.IO (WebSockets)</span>
+            <span class="tech-pill" style="background:#fdf4ff; border-color:rgba(168,85,247,0.3); color:#7e22ce;">Room-based event routing</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="tech-group">
+          <div class="tech-group-title">Database</div>
+          <div class="tech-pills">
+            <span class="tech-pill" style="background:#f0fdf4; border-color:rgba(22,163,74,0.3); color:#15803d;">MongoDB Atlas</span>
+            <span class="tech-pill" style="background:#eff6ff; border-color:rgba(59,130,246,0.3); color:#1e40af;">Mongoose ODM</span>
+            <span class="tech-pill" style="background:#f8fafc; border-color:rgba(30,58,95,0.15); color:#334155;">2dsphere Geo Index</span>
+          </div>
+        </div>
+        <div class="tech-group">
+          <div class="tech-group-title">Maps &amp; Geo</div>
+          <div class="tech-pills">
+            <span class="tech-pill" style="background:#e0f2fe; border-color:rgba(14,165,233,0.3); color:#0369a1;">React-Leaflet</span>
+            <span class="tech-pill" style="background:#f8fafc; border-color:rgba(30,58,95,0.15); color:#334155;">OpenStreetMap (tiles)</span>
+            <span class="tech-pill" style="background:#f0fdf4; border-color:rgba(22,163,74,0.3); color:#15803d;">Nominatim (reverse geocoding)</span>
+          </div>
+        </div>
+        <div class="tech-group">
+          <div class="tech-group-title">Algorithms</div>
+          <div class="tech-pills">
+            <span class="tech-pill" style="background:#fdf4ff; border-color:rgba(168,85,247,0.3); color:#7e22ce;">Haversine (distance)</span>
+            <span class="tech-pill" style="background:#fff7ed; border-color:rgba(249,115,22,0.3); color:#c2410c;">Statistical forecasting (AI)</span>
+            <span class="tech-pill" style="background:#f0fdf4; border-color:rgba(22,163,74,0.3); color:#15803d;">Atomic findOneAndUpdate</span>
+          </div>
+        </div>
+        <div class="tech-group">
+          <div class="tech-group-title">Auth &amp; Security</div>
+          <div class="tech-pills">
+            <span class="tech-pill" style="background:#eff6ff; border-color:rgba(59,130,246,0.3); color:#1e40af;">bcryptjs (password hashing)</span>
+            <span class="tech-pill" style="background:#f0fdf4; border-color:rgba(22,163,74,0.3); color:#15803d;">OTP (6-digit, 24h TTL)</span>
+            <span class="tech-pill" style="background:#f8fafc; border-color:rgba(30,58,95,0.15); color:#334155;">Role-based middleware</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 10 — IMPLEMENTATION COST -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s10">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div><div class="logo-text">MREM Engineering College</div><div class="logo-sub">NYXORA — National Hackathon 2026</div></div>
+    </div>
+    <div class="slide-num">Slide 10 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">Estimated Implementation Cost</div>
+    <div class="two-col" style="gap:24px; align-items:start;">
+      <div>
+        <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:10px;">MVP Phase (Current — Free)</div>
+        <table class="cost">
+          <thead><tr><th>Component</th><th>Service</th><th>Cost/month</th></tr></thead>
+          <tbody>
+            <tr><td>Hosting</td><td>Vercel (Hobby)</td><td class="free">₹0</td></tr>
+            <tr><td>Database</td><td>MongoDB Atlas (M0 Free)</td><td class="free">₹0</td></tr>
+            <tr><td>Maps</td><td>OpenStreetMap + Nominatim</td><td class="free">₹0</td></tr>
+            <tr><td>Auth</td><td>NextAuth (self-hosted)</td><td class="free">₹0</td></tr>
+            <tr><td>WebSockets</td><td>Bundled with Vercel</td><td class="free">₹0</td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="2">MVP Total</td><td class="free">₹0 / month</td></tr></tfoot>
+        </table>
+      </div>
+      <div>
+        <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:10px;">Production Scale Phase</div>
+        <table class="cost">
+          <thead><tr><th>Component</th><th>Service</th><th>Cost/month</th></tr></thead>
+          <tbody>
+            <tr><td>Hosting</td><td>Vercel Pro</td><td>~₹1,700</td></tr>
+            <tr><td>Database</td><td>MongoDB Atlas M10</td><td>~₹2,100</td></tr>
+            <tr><td>SMS OTP</td><td>Twilio / MSG91</td><td>~₹500</td></tr>
+            <tr><td>CDN / Storage</td><td>Cloudflare R2</td><td>~₹400</td></tr>
+            <tr><td>Domain</td><td>.in domain</td><td>~₹100</td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="2">Production Total</td><td>~₹4,800 / month</td></tr></tfoot>
+        </table>
+        <div style="margin-top:12px; padding:10px 13px; background:#f0fdf4; border-radius:10px; border:1.5px solid rgba(22,163,74,0.2); font-size:0.72rem; color:#15803d;">
+          <strong>Self-sustaining model:</strong> NGO wallet top-ups and a small platform fee (₹10/delivery) on high-volume corridors can cover operational costs without external funding.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 11 — MVP SNAPSHOTS -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s11">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div><div class="logo-text">MREM Engineering College</div><div class="logo-sub">NYXORA — National Hackathon 2026</div></div>
+    </div>
+    <div class="slide-num">Slide 11 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">MVP Snapshots</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:10px;">
+      <!-- Donor card mock -->
+      <div style="border:1.5px solid rgba(22,163,74,0.2); border-radius:12px; overflow:hidden;">
+        <div style="background:#16a34a; padding:6px 10px; font-size:0.6rem; font-weight:700; color:white;">Donor — Post Food</div>
+        <div style="padding:10px; background:#f9fafb;">
+          <div style="background:white; border-radius:8px; padding:8px; border:1px solid #e5e7eb; font-size:0.62rem; line-height:1.6; color:#374151;">
+            <strong>Food Type:</strong> Cooked<br/>
+            <strong>Items:</strong> Biryani 10kg, Dal 5L<br/>
+            <strong>Expiry:</strong> 3 hours<br/>
+            <strong>Pickup:</strong> Hotel Saraswathi, Medchal<br/>
+            <div style="background:#16a34a; color:white; text-align:center; border-radius:6px; padding:4px; margin-top:6px; font-weight:600;">Submit Listing</div>
+          </div>
+        </div>
+      </div>
+      <!-- NGO Live tracker -->
+      <div style="border:1.5px solid rgba(59,130,246,0.2); border-radius:12px; overflow:hidden;">
+        <div style="background:#3b82f6; padding:6px 10px; font-size:0.6rem; font-weight:700; color:white;">NGO — Live Tracker</div>
+        <div style="padding:10px; background:#f9fafb; display:flex; flex-direction:column; gap:5px;">
+          <div style="background:#dbeafe; border-radius:7px; padding:5px 8px; font-size:0.6rem; color:#1e40af; font-weight:600; display:flex; gap:5px; align-items:center;">
+            <span>⚡ LIVE</span><span>ETA ~8 min</span>
+          </div>
+          <div style="background:white; border-radius:7px; padding:6px 8px; font-size:0.6rem; color:#374151; border:1px solid #e5e7eb;">
+            ✅ You claimed this listing · 12:05<br/>
+            🏍️ Volunteer assigned · 12:06<br/>
+            📦 Food picked up · 12:07<br/>
+          </div>
+          <div style="background:#f0fdf4; border-radius:7px; padding:5px 8px; font-size:0.68rem; color:#15803d; font-weight:700; letter-spacing:0.15em;">OTP: 847291</div>
+        </div>
+      </div>
+      <!-- Volunteer OTP modal -->
+      <div style="border:1.5px solid rgba(168,85,247,0.2); border-radius:12px; overflow:hidden;">
+        <div style="background:#8b5cf6; padding:6px 10px; font-size:0.6rem; font-weight:700; color:white;">Volunteer — OTP Verify</div>
+        <div style="padding:10px; background:#f9fafb;">
+          <div style="background:white; border-radius:8px; padding:8px; border:1px solid #e5e7eb; text-align:center;">
+            <div style="font-size:0.6rem; font-weight:700; color:#8b5cf6; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:4px;">Confirm Delivery</div>
+            <div style="font-size:0.62rem; color:#6b7280; margin-bottom:8px;">Ask NGO to show their OTP</div>
+            <div style="display:flex; gap:4px; justify-content:center; margin-bottom:8px;">
+              <div style="width:22px; height:28px; border:1.5px solid #8b5cf6; border-radius:5px; background:#faf5ff; font-size:0.85rem; font-weight:800; color:#7e22ce; display:flex; align-items:center; justify-content:center;">8</div>
+              <div style="width:22px; height:28px; border:1.5px solid #8b5cf6; border-radius:5px; background:#faf5ff; font-size:0.85rem; font-weight:800; color:#7e22ce; display:flex; align-items:center; justify-content:center;">4</div>
+              <div style="width:22px; height:28px; border:1.5px solid #8b5cf6; border-radius:5px; background:#faf5ff; font-size:0.85rem; font-weight:800; color:#7e22ce; display:flex; align-items:center; justify-content:center;">7</div>
+              <div style="width:22px; height:28px; border:1.5px solid #8b5cf6; border-radius:5px; background:#faf5ff; font-size:0.85rem; font-weight:800; color:#7e22ce; display:flex; align-items:center; justify-content:center;">2</div>
+              <div style="width:22px; height:28px; border:1.5px solid #8b5cf6; border-radius:5px; background:#faf5ff; font-size:0.85rem; font-weight:800; color:#7e22ce; display:flex; align-items:center; justify-content:center;">9</div>
+              <div style="width:22px; height:28px; border:1.5px solid #8b5cf6; border-radius:5px; background:#faf5ff; font-size:0.85rem; font-weight:800; color:#7e22ce; display:flex; align-items:center; justify-content:center;">1</div>
+            </div>
+            <div style="background:#8b5cf6; color:white; border-radius:6px; padding:4px; font-size:0.65rem; font-weight:700;">Confirm Delivery</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <div style="border:1.5px solid rgba(249,115,22,0.2); border-radius:12px; overflow:hidden;">
+        <div style="background:#f97316; padding:6px 10px; font-size:0.6rem; font-weight:700; color:white;">Volunteer — Route Map</div>
+        <div style="padding:10px; background:#f0f9ff; display:flex; align-items:center; justify-content:center; height:80px;">
+          <div style="font-size:0.72rem; color:#475569; text-align:center;">🗺️ OpenStreetMap<br/><span style="font-size:0.6rem; color:#94a3b8;">Pickup pin · Drop-off pin · Volunteer location<br/>Distance: 2.1 km · ETA: ~4 min</span></div>
+        </div>
+      </div>
+      <div style="border:1.5px solid rgba(22,163,74,0.2); border-radius:12px; overflow:hidden;">
+        <div style="background:#16a34a; padding:6px 10px; font-size:0.6rem; font-weight:700; color:white;">Volunteer — Earnings Wallet</div>
+        <div style="padding:10px; background:#f0fdf4; display:flex; align-items:center; justify-content:center; height:80px;">
+          <div style="text-align:center;">
+            <div style="font-size:1.4rem; font-weight:900; color:#15803d;">₹340</div>
+            <div style="font-size:0.6rem; color:#16a34a;">Total earned · 5 deliveries</div>
+            <div style="font-size:0.58rem; color:#94a3b8; margin-top:2px;">+₹154 · Fried Rice delivery · today</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 12 — FUTURE + LINKS -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s12">
+  <div class="slide-header">
+    <div class="logo-block">
+      <div class="logo-circle">MREM<br/>2k26</div>
+      <div><div class="logo-text">MREM Engineering College</div><div class="logo-sub">NYXORA — National Hackathon 2026</div></div>
+    </div>
+    <div class="slide-num">Slide 12 of 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="slide-title">Future Development &amp; Links</div>
+    <div class="two-col" style="gap:24px; align-items:start;">
+      <div>
+        <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:12px;">Roadmap</div>
+        <div class="future-grid" style="grid-template-columns:1fr;">
+          <div class="future-item">
+            <div class="future-num">1</div>
+            <div class="future-body">
+              <div class="title">Mobile App (React Native)</div>
+              <div class="desc">Native Android/iOS app for volunteers with push notifications and live GPS sharing.</div>
+            </div>
+          </div>
+          <div class="future-item">
+            <div class="future-num">2</div>
+            <div class="future-body">
+              <div class="title">SMS OTP (Twilio / MSG91)</div>
+              <div class="desc">Replace in-app OTP with SMS — works even without internet on the donor/NGO side.</div>
+            </div>
+          </div>
+          <div class="future-item">
+            <div class="future-num">3</div>
+            <div class="future-body">
+              <div class="title">Corporate CSR Integration</div>
+              <div class="desc">Tax-benefit receipts for donor companies. API for bulk listing upload from hotel ERPs.</div>
+            </div>
+          </div>
+          <div class="future-item">
+            <div class="future-num">4</div>
+            <div class="future-body">
+              <div class="title">Multi-city Expansion &amp; Admin Panel</div>
+              <div class="desc">City-level admin dashboards with impact metrics, volunteer leaderboards, and NGO ratings.</div>
+            </div>
+          </div>
+          <div class="future-item">
+            <div class="future-num">5</div>
+            <div class="future-body">
+              <div class="title">Government Integration</div>
+              <div class="desc">Connect with FSSAI-registered food banks and state hunger-map data for targeted routing.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:12px;">Project Links</div>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="background:#f8fafc; border:1.5px solid rgba(30,58,95,0.1); border-radius:14px; padding:16px 18px;">
+            <div style="font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#94a3b8; margin-bottom:6px;">1. GitHub Repository</div>
+            <div style="font-size:0.78rem; font-weight:600; color:#0f172a;">github.com / [to be added]</div>
+            <div style="font-size:0.65rem; color:#64748b; margin-top:3px;">Full source code · MIT License · TypeScript</div>
+          </div>
+          <div style="background:#f0fdf4; border:1.5px solid rgba(22,163,74,0.2); border-radius:14px; padding:16px 18px;">
+            <div style="font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#15803d; margin-bottom:6px;">2. Live MVP / Prototype</div>
+            <div style="font-size:0.78rem; font-weight:600; color:#0f172a;">localhost:3000 (live demo)</div>
+            <div style="font-size:0.65rem; color:#64748b; margin-top:3px;">16 pre-seeded accounts · Full end-to-end flow running</div>
+          </div>
+          <div style="background:#eff6ff; border:1.5px solid rgba(59,130,246,0.2); border-radius:14px; padding:14px 18px;">
+            <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#1e40af; margin-bottom:8px;">Impact we aim for</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; text-align:center;">
+              <div><div style="font-size:1.1rem; font-weight:900; color:#1e40af;">40%</div><div style="font-size:0.6rem; color:#64748b;">food waste reduction in partner areas</div></div>
+              <div><div style="font-size:1.1rem; font-weight:900; color:#16a34a;">1000+</div><div style="font-size:0.6rem; color:#64748b;">meals redirected per month per city</div></div>
+              <div><div style="font-size:1.1rem; font-weight:900; color:#c2410c;">₹0</div><div style="font-size:0.6rem; color:#64748b;">cost to donors — just one click</div></div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:14px; padding:10px 14px; background:#0f172a; border-radius:12px; text-align:center;">
+          <div style="font-size:0.65rem; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:4px;">Team Error 404</div>
+          <div style="font-size:1rem; font-weight:800; color:white; letter-spacing:-0.02em;">ZeroWaste — Turning Surplus into Service</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer"></div>
+</div>
+
+<script>
+  let current = 1;
+  const total = 12;
+
+  function changeSlide(dir) {
+    document.getElementById('s' + current).classList.remove('active');
+    current = Math.max(1, Math.min(total, current + dir));
+    document.getElementById('s' + current).classList.add('active');
+    document.getElementById('counter').textContent = current + ' / ' + total;
+    window.scrollTo(0, 0);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') changeSlide(1);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') changeSlide(-1);
+  });
+</script>
+</body>
+</html>

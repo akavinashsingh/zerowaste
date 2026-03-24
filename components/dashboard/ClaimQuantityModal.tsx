@@ -12,6 +12,7 @@ type Listing = {
   donorAddress: string;
   foodItems: FoodItem[];
   remainingItems?: FoodItem[];
+  partialClaims?: { ngoName: string; claimedItems: FoodItem[] }[];
   totalQuantity: string;
   foodType: "cooked" | "packaged" | "raw";
   expiresAt: string;

@@ -16,6 +16,13 @@ export interface IFoodListing extends Document {
   donorAddress: string;
   foodItems: FoodItem[];
   claimedFoodItems?: FoodItem[];
+  remainingItems?: FoodItem[];
+  partialClaims?: Array<{
+    ngoId: Types.ObjectId;
+    ngoName: string;
+    claimedItems: FoodItem[];
+    claimedAt: Date;
+  }>;
   totalQuantity: string;
   totalMeals: number;
   foodType: FoodType;
@@ -52,6 +59,16 @@ const FoodItemSchema = new Schema<FoodItem>(
   { _id: false },
 );
 
+const PartialClaimSchema = new Schema(
+  {
+    ngoId: { type: Schema.Types.ObjectId, ref: "User" },
+    ngoName: { type: String, trim: true },
+    claimedItems: { type: [FoodItemSchema] },
+    claimedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const FoodListingSchema = new Schema<IFoodListing>({
   donorId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
   donorName: { type: String, required: true, trim: true },
@@ -59,6 +76,8 @@ const FoodListingSchema = new Schema<IFoodListing>({
   donorAddress: { type: String, required: true, trim: true },
   foodItems: { type: [FoodItemSchema], required: true },
   claimedFoodItems: { type: [FoodItemSchema], default: undefined },
+  remainingItems: { type: [FoodItemSchema], default: undefined },
+  partialClaims: { type: [PartialClaimSchema], default: undefined },
   totalQuantity: { type: String, required: true, trim: true },
   totalMeals: { type: Number, required: true, min: 0, default: 0, index: true },
   foodType: { type: String, enum: ["cooked", "packaged", "raw"], required: true },

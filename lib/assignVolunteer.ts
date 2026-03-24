@@ -23,6 +23,48 @@ import FoodListing from "@/models/FoodListing";
 import User from "@/models/User";
 import VolunteerTask from "@/models/VolunteerTask";
 
+// ── Quantity helpers ──────────────────────────────────────────────────────────
+
+type FoodItem = { name: string; quantity: string; unit: string };
+
+/** Extract the leading number from a quantity string, e.g. "50 kg" → 50, "3" → 3 */
+function parseQtyNum(s: string): number | null {
+  const m = s.trim().match(/^(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : null;
+}
+
+/**
+ * Subtract claimed items from current items.
+ * Returns { remaining, isPartial } where isPartial is true when at least one
+ * item still has a positive quantity left after the subtraction.
+ */
+function computeRemaining(
+  current: FoodItem[],
+  claimed: FoodItem[],
+): { remaining: FoodItem[]; isPartial: boolean } {
+  let isPartial = false;
+  const remaining: FoodItem[] = current.map((item) => {
+    const match = claimed.find(
+      (c) => c.name.trim().toLowerCase() === item.name.trim().toLowerCase(),
+    );
+    if (!match) {
+      isPartial = true;
+      return item;
+    }
+    const origNum = parseQtyNum(item.quantity);
+    const claimedNum = parseQtyNum(match.quantity);
+    if (origNum === null || claimedNum === null) {
+      // non-numeric quantity — treat as fully claimed
+      return { ...item, quantity: "0" };
+    }
+    const rem = Math.max(0, origNum - claimedNum);
+    if (rem > 0) isPartial = true;
+    const suffix = item.quantity.trim().replace(/^\d+(?:\.\d+)?/, "").trim();
+    return { ...item, quantity: rem === 0 ? "0" : `${rem}${suffix ? " " + suffix : ""}` };
+  });
+  return { remaining, isPartial };
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 /** Search radius when looking for volunteers near the pickup point */
@@ -115,28 +157,65 @@ export async function autoAssignVolunteer(
     };
   }
 
-  // ── 2. Atomically claim the listing for this NGO ─────────────────────────
+  // ── 2. Determine if this is a partial or full claim ──────────────────────
   const ngoObjectId = new Types.ObjectId(ngoId);
+  const currentItems = listing.foodItems as FoodItem[];
 
+  let isPartial = false;
+  let newRemainingItems: FoodItem[] | null = null;
+
+  if (claimedFoodItems && claimedFoodItems.length > 0) {
+    // Validate — claimed amounts must not exceed available amounts
+    for (const cf of claimedFoodItems) {
+      const available = currentItems.find(
+        (c) => c.name.trim().toLowerCase() === cf.name.trim().toLowerCase(),
+      );
+      if (!available) continue;
+      const availNum = parseQtyNum(available.quantity);
+      const claimedNum = parseQtyNum(cf.quantity);
+      if (availNum !== null && claimedNum !== null && claimedNum > availNum) {
+        return {
+          ok: false,
+          claimed: false,
+          error: {
+            code: "LISTING_UNAVAILABLE",
+            message: `Claimed quantity for "${cf.name}" (${cf.quantity}) exceeds what is available (${available.quantity} ${available.unit}).`,
+          },
+        };
+      }
+    }
+
+    const result = computeRemaining(currentItems, claimedFoodItems);
+    isPartial = result.isPartial;
+    newRemainingItems = result.remaining;
+  }
+
+  // ── 3. Atomically update the listing ─────────────────────────────────────
   const claimed = await FoodListing.findOneAndUpdate(
     {
       _id: new Types.ObjectId(listingId),
       status: "available",
       expiresAt: { $gt: now },
     },
-    {
-      $set: {
-        status: "claimed",
-        claimedBy: ngoObjectId,
-        claimedAt: now,
-        ...(claimedFoodItems && claimedFoodItems.length > 0 && { claimedFoodItems }),
-      },
-    },
+    isPartial && claimedFoodItems
+      ? {
+          $set: { foodItems: newRemainingItems },
+          $push: {
+            partialClaims: { ngoId: ngoObjectId, ngoName, claimedItems: claimedFoodItems, claimedAt: now },
+          },
+        }
+      : {
+          $set: {
+            status: "claimed",
+            claimedBy: ngoObjectId,
+            claimedAt: now,
+            ...(claimedFoodItems && claimedFoodItems.length > 0 && { claimedFoodItems }),
+          },
+        },
     { new: true },
   );
 
   if (!claimed) {
-    // Another NGO claimed it between our read and write
     return {
       ok: false,
       claimed: false,
@@ -145,6 +224,11 @@ export async function autoAssignVolunteer(
   }
 
   const [pickupLng, pickupLat] = listing.location.coordinates;
+
+  // Notify other nearby NGOs about the updated quantities (non-blocking)
+  if (isPartial) {
+    void notifyNearbyNgos(listingId, ngoId, claimed, [pickupLng, pickupLat]);
+  }
 
   // ── 3. Find nearby available volunteers ──────────────────────────────────
   const candidates = await User.aggregate<GeoVolunteer>([
@@ -191,28 +275,30 @@ export async function autoAssignVolunteer(
     const pricePerKm = candidate.pricePerKm ?? PAYOUT_CONFIG.DEFAULT_PRICE_PER_KM;
     const payoutAmount = distanceKm !== null ? calcPayoutAmount(distanceKm, pricePerKm) : null;
 
-    // Atomically bind the volunteer to the already-claimed listing
-    const assigned = await FoodListing.findOneAndUpdate(
-      {
-        _id: new Types.ObjectId(listingId),
-        status: "claimed",
-        assignedVolunteer: { $exists: false },
-      },
-      {
-        $set: {
-          assignedVolunteer: candidate._id,
-          volunteerAssignedAt: now,
-          ...(distanceKm !== null && { distanceKm }),
-          ...(payoutAmount !== null && { payoutAmount }),
-          payoutNgoId: ngoObjectId,
+    if (!isPartial) {
+      // Full claim: atomically bind the volunteer to the listing
+      const assigned = await FoodListing.findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(listingId),
+          status: "claimed",
+          assignedVolunteer: { $exists: false },
         },
-      },
-      { new: true },
-    );
+        {
+          $set: {
+            assignedVolunteer: candidate._id,
+            volunteerAssignedAt: now,
+            ...(distanceKm !== null && { distanceKm }),
+            ...(payoutAmount !== null && { payoutAmount }),
+            payoutNgoId: ngoObjectId,
+          },
+        },
+        { new: true },
+      );
 
-    if (!assigned) {
-      // Another request bound a volunteer concurrently — done
-      break;
+      if (!assigned) {
+        // Another request bound a volunteer concurrently — done
+        break;
+      }
     }
 
     const [task] = await VolunteerTask.create([
@@ -254,13 +340,14 @@ export async function autoAssignVolunteer(
     return { ok: true, data: result };
   }
 
-  // All candidates were busy (listing is still claimed)
   return {
     ok: false,
     claimed: true,
     error: {
       code: "ALL_VOLUNTEERS_BUSY",
-      message: "Listing claimed! All nearby volunteers are currently occupied. A volunteer can self-assign from the app.",
+      message: isPartial
+        ? "Your portion is reserved! No volunteers are free right now. A volunteer can self-assign from the app."
+        : "Listing claimed! All nearby volunteers are currently occupied. A volunteer can self-assign from the app.",
     },
   };
 }
@@ -273,6 +360,42 @@ interface DispatchParams {
   ngoId: string;
   ngoName: string;
   listingId: string;
+}
+
+/** Push `listing_updated` to all nearby NGOs (except the claimer) so their dashboards refresh in real-time. */
+async function notifyNearbyNgos(
+  listingId: string,
+  claimerNgoId: string,
+  claimed: { foodItems: unknown; partialClaims?: unknown },
+  pickupCoords: [number, number],
+): Promise<void> {
+  const io = getIO();
+  if (!io) return;
+
+  const nearbyNgos = await User.aggregate<{ _id: Types.ObjectId }>([
+    {
+      $geoNear: {
+        near: { type: "Point", coordinates: pickupCoords },
+        distanceField: "distanceMeters",
+        maxDistance: 50000, // 50 km
+        spherical: true,
+        query: { role: "ngo", "location.coordinates": { $exists: true, $not: { $size: 0 } } },
+      },
+    },
+    { $project: { _id: 1 } },
+  ]);
+
+  const payload = {
+    listingId,
+    foodItems: claimed.foodItems,
+    partialClaims: claimed.partialClaims ?? [],
+  };
+
+  for (const ngo of nearbyNgos) {
+    if (ngo._id.toString() !== claimerNgoId) {
+      io.to(ngo._id.toString()).emit("listing_updated", payload);
+    }
+  }
 }
 
 async function dispatchEvents({

@@ -28,9 +28,12 @@ type NgoFoodDemand = {
   distanceKm?: number;
   createdAt: string;
 };
+type PartialClaim = { ngoName: string; claimedItems: FoodItem[]; claimedAt: string };
 type Listing = {
   _id: string;
   foodItems: FoodItem[];
+  remainingItems?: FoodItem[];
+  partialClaims?: PartialClaim[];
   totalQuantity: string;
   quantityMeals?: number;
   totalMeals?: number;
@@ -466,6 +469,22 @@ export default function DonorDashboard({
                         </div>
                       </div>
 
+                      {!!listing.partialClaims?.length && listing.status === "available" && (
+                        <div style={{ background: "#fff7ed", border: "1px solid rgba(200,96,26,0.2)", borderRadius: 10, padding: "7px 10px", fontSize: "0.75rem", color: "#c8601a", marginBottom: 6 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 3 }}>Remaining (partially claimed)</div>
+                          {listing.foodItems.map((item, i) => (
+                            <div key={i}>{item.name}: {item.quantity} {item.unit}</div>
+                          ))}
+                        </div>
+                      )}
+                      {listing.partialClaims && listing.partialClaims.length > 0 && (
+                        <div style={{ background: "#f0fdf4", border: "1px solid rgba(22,101,52,0.15)", borderRadius: 10, padding: "7px 10px", fontSize: "0.75rem", color: "#166534", marginBottom: 6 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 3 }}>Partial claims ({listing.partialClaims.length})</div>
+                          {listing.partialClaims.map((pc, i) => (
+                            <div key={i}>{pc.ngoName}: {pc.claimedItems.map((ci) => `${ci.quantity} ${ci.unit} ${ci.name}`).join(", ")}</div>
+                          ))}
+                        </div>
+                      )}
                       {listing.claimedBy && (
                         <div className="dd-ngo-chip">
                           <CheckCircle2 size={13} />

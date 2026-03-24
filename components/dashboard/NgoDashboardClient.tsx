@@ -58,6 +58,9 @@ type Listing = {
   donorAddress: string;
   donorId?: DonorContact;
   foodItems: FoodItem[];
+  remainingItems?: FoodItem[];
+  partialClaims?: { ngoName: string; claimedItems: FoodItem[] }[];
+  myClaimedItems?: FoodItem[];
   totalQuantity: string;
   foodType: "cooked" | "packaged" | "raw";
   expiresAt: string;
@@ -254,11 +257,23 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
       );
     };
 
+    const onListingUpdated = (data: { listingId: string; foodItems: FoodItem[]; partialClaims?: { ngoName: string; claimedItems: FoodItem[] }[] }) => {
+      setAvailableListings((prev) =>
+        prev.map((l) =>
+          l._id === data.listingId
+            ? { ...l, foodItems: data.foodItems, partialClaims: data.partialClaims }
+            : l,
+        ),
+      );
+    };
+
     socket.on("demand_accepted", onDemandAccepted);
     socket.on("demand_delivery_status", onDeliveryStatus);
+    socket.on("listing_updated", onListingUpdated);
     return () => {
       socket.off("demand_accepted", onDemandAccepted);
       socket.off("demand_delivery_status", onDeliveryStatus);
+      socket.off("listing_updated", onListingUpdated);
     };
   }, [socketRef]);
 
@@ -301,14 +316,34 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
 
   function handleClaimSuccess(claimedListing: Listing) {
     const listingId = claimedListing._id;
-    setAvailableListings((current) =>
-      current.map((item) => (item._id === listingId ? { ...item, status: "claimed" } : item)),
-    );
-    setClaimedListings((current) => [claimedListing, ...current]);
-    setBannerMessage("Listing claimed successfully.");
-    window.setTimeout(() => {
-      setAvailableListings((current) => current.filter((item) => item._id !== listingId));
-    }, 700);
+    const isPartial = claimedListing.status === "available";
+
+    if (isPartial) {
+      // Partial claim: listing stays available — update quantities in place
+      setAvailableListings((current) =>
+        current.map((item) =>
+          item._id === listingId
+            ? { ...item, foodItems: claimedListing.foodItems, partialClaims: claimedListing.partialClaims }
+            : item,
+        ),
+      );
+      // Also surface it in My Claims so the NGO can track their reservation
+      setClaimedListings((current) => {
+        if (current.some((item) => item._id === listingId)) return current;
+        return [{ ...claimedListing, myClaimedItems: claimedListing.myClaimedItems }, ...current];
+      });
+      setBannerMessage("Your portion has been reserved. The listing remains open for other NGOs.");
+    } else {
+      // Full claim: remove from available, add to claimed
+      setAvailableListings((current) =>
+        current.map((item) => (item._id === listingId ? { ...item, status: "claimed" } : item)),
+      );
+      setClaimedListings((current) => [claimedListing, ...current]);
+      setBannerMessage("Listing claimed successfully.");
+      window.setTimeout(() => {
+        setAvailableListings((current) => current.filter((item) => item._id !== listingId));
+      }, 700);
+    }
     setClaimModalListing(null);
   }
 
@@ -650,6 +685,11 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
                             {listing.foodItems.map((item, index) => (
                               <div key={`${listing._id}-item-${index}`}>{item.name}: {item.quantity} {item.unit}</div>
                             ))}
+                            {!!listing.partialClaims?.length && (
+                              <div style={{ marginTop: 4, color: "#c8601a", fontWeight: 600, fontSize: "0.72rem" }}>
+                                Partially claimed — quantities above are what remains
+                              </div>
+                            )}
                           </div>
 
                           <div className="nd-meta">
@@ -688,11 +728,27 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
                         <div className="nd-body">
                           <div className="nd-top">
                             <div className="nd-h">{listing.foodItems.map((item) => item.name).join(", ")}</div>
-                            <span className="nd-badge" style={{ background: status.bg, color: status.color }}>
-                              <span className="nd-dot" style={{ background: status.dot }} />
-                              {status.label}
-                            </span>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                              <span className="nd-badge" style={{ background: status.bg, color: status.color }}>
+                                <span className="nd-dot" style={{ background: status.dot }} />
+                                {status.label}
+                              </span>
+                              {listing.myClaimedItems && (
+                                <span style={{ background: "#fff7ed", color: "#c8601a", border: "1px solid rgba(200,96,26,0.2)", borderRadius: 100, padding: "2px 8px", fontSize: "0.65rem", fontWeight: 700 }}>
+                                  Partial Claim
+                                </span>
+                              )}
+                            </div>
                           </div>
+
+                          {listing.myClaimedItems && (
+                            <div className="nd-meta" style={{ marginBottom: 10 }}>
+                              <div style={{ fontWeight: 700, color: "#2c2820", marginBottom: 3 }}>Your Reserved Quantities</div>
+                              {listing.myClaimedItems.map((item, i) => (
+                                <div key={i}>{item.name}: {item.quantity} {item.unit}</div>
+                              ))}
+                            </div>
+                          )}
 
                           <div className="nd-meta" style={{ marginBottom: 10 }}>
                             <div style={{ fontWeight: 700, color: "#2c2820" }}>Donor Contact</div>

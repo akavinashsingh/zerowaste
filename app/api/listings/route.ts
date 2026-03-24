@@ -203,7 +203,7 @@ export async function GET(request: Request) {
 
   const rawListings = await FoodListing.find({ status: "available" })
     .sort({ createdAt: -1 })
-    .select("donorName donorAddress foodItems expiresAt totalQuantity foodType images location status createdAt")
+    .select("donorName donorAddress foodItems remainingItems partialClaims expiresAt totalQuantity foodType images location status createdAt")
     .lean();
 
   const listings = rawListings.map((doc) => ({

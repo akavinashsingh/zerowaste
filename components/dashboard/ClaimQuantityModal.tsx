@@ -11,6 +11,7 @@ type Listing = {
   donorPhone: string;
   donorAddress: string;
   foodItems: FoodItem[];
+  remainingItems?: FoodItem[];
   totalQuantity: string;
   foodType: "cooked" | "packaged" | "raw";
   expiresAt: string;
@@ -30,8 +31,9 @@ interface Props {
 }
 
 export default function ClaimQuantityModal({ listing, onClose, onClaimed }: Props) {
+  const displayItems = listing.foodItems;
   const [quantities, setQuantities] = useState<Record<number, string>>(
-    Object.fromEntries(listing.foodItems.map((item, i) => [i, item.quantity])),
+    Object.fromEntries(displayItems.map((item, i) => [i, item.quantity])),
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,11 +42,28 @@ export default function ClaimQuantityModal({ listing, onClose, onClaimed }: Prop
     setQuantities((prev) => ({ ...prev, [index]: value }));
   }
 
+  function parseNum(s: string): number | null {
+    const m = s.trim().match(/^(\d+(?:\.\d+)?)/);
+    return m ? parseFloat(m[1]) : null;
+  }
+
   async function handleClaim() {
     setError(null);
+
+    // Client-side: ensure no item exceeds available quantity
+    for (let i = 0; i < displayItems.length; i++) {
+      const item = displayItems[i];
+      const enteredNum = parseNum(quantities[i] ?? item.quantity);
+      const availNum = parseNum(item.quantity);
+      if (enteredNum !== null && availNum !== null && enteredNum > availNum) {
+        setError(`"${item.name}" — you entered ${quantities[i]} but only ${item.quantity} ${item.unit} is available.`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      const claimedItems = listing.foodItems.map((item, i) => ({
+      const claimedItems = displayItems.map((item, i) => ({
         name: item.name,
         quantity: (quantities[i] ?? item.quantity).trim() || item.quantity,
         unit: item.unit,
@@ -74,60 +93,67 @@ export default function ClaimQuantityModal({ listing, onClose, onClaimed }: Prop
     <Modal open onClose={onClose} title="Select Quantities to Claim" size="md">
       <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
         <p style={{ fontSize: "0.83rem", color: "#6b6560", marginBottom: "1.25rem", marginTop: 0 }}>
-          From <strong>{listing.donorName}</strong> — adjust how much of each item you need. Leave unchanged to claim the full amount.
+          From <strong>{listing.donorName}</strong> — adjust how much of each item you need.
+          {!!listing.partialClaims?.length && <span style={{ color: "#c8601a", fontWeight: 600 }}> Showing remaining available quantities.</span>}
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1.25rem" }}>
-          {listing.foodItems.map((item, i) => (
-            <div
-              key={`${listing._id}-item-${i}`}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto 120px",
-                alignItems: "center",
-                gap: "0.75rem",
-                background: "#f6f4f0",
-                borderRadius: 12,
-                padding: "0.65rem 0.9rem",
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 600, fontSize: "0.85rem", color: "#2c2820" }}>{item.name}</div>
-                <div style={{ fontSize: "0.72rem", color: "#8a837d", marginTop: 2 }}>
-                  Available: {item.quantity} {item.unit}
-                </div>
-              </div>
-              <span
+          {displayItems.map((item, i) => {
+            const enteredNum = parseNum(quantities[i] ?? item.quantity);
+            const availNum = parseNum(item.quantity);
+            const exceeded = enteredNum !== null && availNum !== null && enteredNum > availNum;
+            return (
+              <div
+                key={`${listing._id}-item-${i}`}
                 style={{
-                  background: "#dbeafe",
-                  color: "#1e40af",
-                  borderRadius: 8,
-                  padding: "2px 8px",
-                  fontSize: "0.7rem",
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto 120px",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  background: exceeded ? "#fff1f2" : "#f6f4f0",
+                  borderRadius: 12,
+                  padding: "0.65rem 0.9rem",
+                  border: exceeded ? "1.5px solid #fecdd3" : "1.5px solid transparent",
                 }}
               >
-                {item.unit}
-              </span>
-              <input
-                type="text"
-                value={quantities[i] ?? item.quantity}
-                onChange={(e) => setQty(i, e.target.value)}
-                placeholder={item.quantity}
-                style={{
-                  height: 36,
-                  borderRadius: 10,
-                  border: "1.5px solid rgba(44,40,32,0.15)",
-                  background: "#fff",
-                  padding: "0 0.6rem",
-                  fontSize: "0.85rem",
-                  color: "#2c2820",
-                  width: "100%",
-                }}
-              />
-            </div>
-          ))}
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "0.85rem", color: "#2c2820" }}>{item.name}</div>
+                  <div style={{ fontSize: "0.72rem", color: exceeded ? "#be123c" : "#8a837d", marginTop: 2, fontWeight: exceeded ? 700 : 400 }}>
+                    {exceeded ? `Max: ${item.quantity} ${item.unit}` : `Available: ${item.quantity} ${item.unit}`}
+                  </div>
+                </div>
+                <span
+                  style={{
+                    background: "#dbeafe",
+                    color: "#1e40af",
+                    borderRadius: 8,
+                    padding: "2px 8px",
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {item.unit}
+                </span>
+                <input
+                  type="text"
+                  value={quantities[i] ?? item.quantity}
+                  onChange={(e) => setQty(i, e.target.value)}
+                  placeholder={item.quantity}
+                  style={{
+                    height: 36,
+                    borderRadius: 10,
+                    border: `1.5px solid ${exceeded ? "#fda4af" : "rgba(44,40,32,0.15)"}`,
+                    background: "#fff",
+                    padding: "0 0.6rem",
+                    fontSize: "0.85rem",
+                    color: exceeded ? "#be123c" : "#2c2820",
+                    width: "100%",
+                  }}
+                />
+              </div>
+            );
+          })}
         </div>
 
         {error && (

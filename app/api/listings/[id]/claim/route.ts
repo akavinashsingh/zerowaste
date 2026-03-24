@@ -13,14 +13,20 @@ function normalizeLocation(raw: RawLocation | null | undefined) {
   return { lat: raw.coordinates[1] ?? 0, lng: raw.coordinates[0] ?? 0, address: raw.address ?? "" };
 }
 
-async function fetchListing(id: string) {
+async function fetchListing(id: string, ngoId: string) {
   const doc = await FoodListing.findById(id)
     .populate("claimedBy", "name phone email")
     .populate("donorId", "name phone email address")
     .populate("assignedVolunteer", "name phone rating")
     .lean();
   if (!doc) return null;
-  return { ...doc, location: normalizeLocation(doc.location as RawLocation | undefined) };
+  const partialClaims = doc.partialClaims as Array<{ ngoId: { toString(): string }; claimedItems: unknown[] }> | undefined;
+  const myPartialClaim = partialClaims?.find((pc) => pc.ngoId.toString() === ngoId);
+  return {
+    ...doc,
+    location: normalizeLocation(doc.location as RawLocation | undefined),
+    ...(myPartialClaim && doc.status === "available" && { myClaimedItems: myPartialClaim.claimedItems }),
+  };
 }
 
 export async function POST(
@@ -60,7 +66,7 @@ export async function POST(
   }
 
   // Fetch the (now-claimed) listing for the response
-  const listing = await fetchListing(id);
+  const listing = await fetchListing(id, session.user.id);
 
   // Soft failure — listing WAS claimed, but no volunteer found yet
   if (!outcome.ok && outcome.claimed) {

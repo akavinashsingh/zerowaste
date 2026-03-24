@@ -33,19 +33,26 @@ export default function NotificationBell() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  useEffect(() => {
-    const userId = session?.user?.id;
-    if (!userId) return;
-
+  function fetchNotifications() {
     fetch("/api/notifications")
       .then((res) => res.json())
       .then((data: { notifications?: AppNotification[] }) => {
         setNotifications(data.notifications ?? []);
       })
-      .catch(() => {
-        // silent — non-critical
-      });
+      .catch(() => { /* non-critical */ });
+  }
+
+  // Initial load
+  useEffect(() => {
+    if (session?.user?.id) fetchNotifications();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
+
+  // Re-fetch from DB every time the dropdown opens so read state is always fresh
+  useEffect(() => {
+    if (open && session?.user?.id) fetchNotifications();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Listen for incoming socket notifications
   useEffect(() => {

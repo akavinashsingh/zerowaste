@@ -15,6 +15,7 @@ export interface IFoodListing extends Document {
   donorPhone: string;
   donorAddress: string;
   foodItems: FoodItem[];
+  claimedFoodItems?: FoodItem[];
   totalQuantity: string;
   totalMeals: number;
   foodType: FoodType;
@@ -57,6 +58,7 @@ const FoodListingSchema = new Schema<IFoodListing>({
   donorPhone: { type: String, required: true, trim: true },
   donorAddress: { type: String, required: true, trim: true },
   foodItems: { type: [FoodItemSchema], required: true },
+  claimedFoodItems: { type: [FoodItemSchema], default: undefined },
   totalQuantity: { type: String, required: true, trim: true },
   totalMeals: { type: Number, required: true, min: 0, default: 0, index: true },
   foodType: { type: String, enum: ["cooked", "packaged", "raw"], required: true },

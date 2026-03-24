@@ -248,7 +248,8 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
   const activeTasks = myTasks.filter((t) => t.status === "claimed" || t.status === "picked_up");
   const completedTasks = myTasks.filter((t) => t.status === "delivered");
   const routeMetrics =
-    routeTask?.claimedBy?.location
+    routeTask?.location?.lat != null && routeTask.location?.lng != null &&
+    routeTask?.claimedBy?.location?.lat != null && routeTask.claimedBy?.location?.lng != null
       ? getRouteMetrics(
           { lat: routeTask.location.lat, lng: routeTask.location.lng },
           { lat: routeTask.claimedBy.location.lat, lng: routeTask.claimedBy.location.lng },
@@ -855,7 +856,7 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
               </button>
             </div>
 
-            {routeTask.claimedBy?.location ? (
+            {routeTask.location?.lat != null && routeTask.location?.lng != null && routeTask.claimedBy?.location?.lat != null && routeTask.claimedBy?.location?.lng != null ? (
               <RouteMap
                 pickup={{ lat: routeTask.location.lat, lng: routeTask.location.lng, label: `${routeTask.donorName} (Pickup)` }}
                 dropoff={{ lat: routeTask.claimedBy.location.lat, lng: routeTask.claimedBy.location.lng, label: `${routeTask.claimedBy.name} (Drop-off)` }}
@@ -864,8 +865,8 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
             ) : (
               <div style={{ background: "#f5f3ef", borderRadius: 14, padding: "2rem", textAlign: "center", fontSize: "0.82rem", color: "#6b6560" }}>
                 <div style={{ fontWeight: 600, color: "#2c2820", marginBottom: 4 }}>Pickup location only</div>
-                <div>{routeTask.location.address}</div>
-                <div style={{ marginTop: 8, color: "#a09a94" }}>NGO drop-off coordinates not set.</div>
+                <div>{routeTask.location?.address ?? "Address not available"}</div>
+                <div style={{ marginTop: 8, color: "#a09a94" }}>Full route unavailable — donor or NGO coordinates not set.</div>
               </div>
             )}
           </div>

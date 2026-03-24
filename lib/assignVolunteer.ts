@@ -83,6 +83,7 @@ export async function autoAssignVolunteer(
   listingId: string,
   ngoId: string,
   ngoName: string,
+  claimedFoodItems?: { name: string; quantity: string; unit: string }[],
 ): Promise<
   | { ok: true; data: AssignmentResult }
   | { ok: false; claimed: true; error: AssignmentError }
@@ -123,7 +124,14 @@ export async function autoAssignVolunteer(
       status: "available",
       expiresAt: { $gt: now },
     },
-    { $set: { status: "claimed", claimedBy: ngoObjectId, claimedAt: now } },
+    {
+      $set: {
+        status: "claimed",
+        claimedBy: ngoObjectId,
+        claimedAt: now,
+        ...(claimedFoodItems && claimedFoodItems.length > 0 && { claimedFoodItems }),
+      },
+    },
     { new: true },
   );
 

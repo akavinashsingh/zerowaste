@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { Sparkles, MapPin, RefreshCw, LogOut, Plus, X, Loader2 } from "lucide-react";
 
+import ClaimQuantityModal from "@/components/dashboard/ClaimQuantityModal";
 import ListingsMap from "@/components/maps/ListingsMap";
 import { useSocket } from "@/hooks/useSocket";
 
@@ -135,7 +136,7 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
   const [filterFoodType, setFilterFoodType] = useState<FoodTypeFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>(sessionUser.location ? "nearest" : "newest");
   const [isLoading, setIsLoading] = useState(true);
-  const [isClaimLoading, setIsClaimLoading] = useState<Record<string, boolean>>({});
+  const [claimModalListing, setClaimModalListing] = useState<Listing | null>(null);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -298,48 +299,17 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
     [availableListings, claimedListings.length, now],
   );
 
-  async function handleClaimListing(listingId: string) {
-    setIsClaimLoading((state) => ({ ...state, [listingId]: true }));
-    setError(null);
-    setBannerMessage(null);
-
-    const listingExists = availableListings.some((item) => item._id === listingId);
-
-    if (!listingExists) {
-      setIsClaimLoading((state) => ({ ...state, [listingId]: false }));
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/listings/${listingId}/claim`, {
-        method: "POST",
-      });
-
-      const data = (await response.json()) as { listing?: Listing; error?: string };
-
-      if (!response.ok || !data.listing) {
-        throw new Error(data.error || "Unable to claim listing.");
-      }
-
-      const claimedListing = data.listing;
-
-      setAvailableListings((current) =>
-        current.map((item) => (item._id === listingId ? { ...item, status: "claimed" } : item)),
-      );
-      setClaimedListings((current) => [claimedListing, ...current]);
-      setBannerMessage("Listing claimed successfully.");
-
-      window.setTimeout(() => {
-        setAvailableListings((current) => current.filter((item) => item._id !== listingId));
-      }, 700);
-    } catch (claimError) {
-      setAvailableListings((current) =>
-        current.map((item) => (item._id === listingId ? { ...item, status: "available" } : item)),
-      );
-      setError(claimError instanceof Error ? claimError.message : "Unable to claim listing.");
-    } finally {
-      setIsClaimLoading((state) => ({ ...state, [listingId]: false }));
-    }
+  function handleClaimSuccess(claimedListing: Listing) {
+    const listingId = claimedListing._id;
+    setAvailableListings((current) =>
+      current.map((item) => (item._id === listingId ? { ...item, status: "claimed" } : item)),
+    );
+    setClaimedListings((current) => [claimedListing, ...current]);
+    setBannerMessage("Listing claimed successfully.");
+    window.setTimeout(() => {
+      setAvailableListings((current) => current.filter((item) => item._id !== listingId));
+    }, 700);
+    setClaimModalListing(null);
   }
 
   return (
@@ -634,11 +604,11 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
                         <div className="nd-meta">Pickup deadline: {formatDateTime(selectedMapListing.expiresAt)}</div>
                         <button
                           type="button"
-                          disabled={isClaimLoading[selectedMapListing._id] || selectedMapListing.status !== "available"}
-                          onClick={() => void handleClaimListing(selectedMapListing._id)}
+                          disabled={selectedMapListing.status !== "available"}
+                          onClick={() => setClaimModalListing(selectedMapListing)}
                           className="nd-claim"
                         >
-                          {isClaimLoading[selectedMapListing._id] ? "Claiming..." : selectedMapListing.status === "available" ? "Claim" : "View"}
+                          {selectedMapListing.status === "available" ? "Claim" : "Claimed"}
                         </button>
                       </div>
                     ) : (
@@ -690,11 +660,11 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
 
                           <button
                             type="button"
-                            disabled={isClaimLoading[listing._id] || listing.status !== "available"}
-                            onClick={() => void handleClaimListing(listing._id)}
+                            disabled={listing.status !== "available"}
+                            onClick={() => setClaimModalListing(listing)}
                             className="nd-claim"
                           >
-                            {isClaimLoading[listing._id] ? "Claiming..." : listing.status === "claimed" ? "Claimed" : "Claim"}
+                            {listing.status === "available" ? "Claim" : "Claimed"}
                           </button>
                         </div>
                       </article>
@@ -751,6 +721,14 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
           )}
         </div>
       </div>
+
+      {claimModalListing && (
+        <ClaimQuantityModal
+          listing={claimModalListing}
+          onClose={() => setClaimModalListing(null)}
+          onClaimed={handleClaimSuccess}
+        />
+      )}
 
       {showDemandModal && (
         <PostDemandModal

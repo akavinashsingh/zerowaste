@@ -24,7 +24,7 @@ async function fetchListing(id: string) {
 }
 
 export async function POST(
-  _: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getServerSession(authOptions);
@@ -35,9 +35,19 @@ export async function POST(
 
   const { id } = await params;
 
+  let claimedItems: { name: string; quantity: string; unit: string }[] | undefined;
+  try {
+    const body = (await req.json()) as { claimedItems?: unknown };
+    if (Array.isArray(body?.claimedItems)) {
+      claimedItems = body.claimedItems as { name: string; quantity: string; unit: string }[];
+    }
+  } catch {
+    // body is optional
+  }
+
   await connectMongo();
 
-  const outcome = await autoAssignVolunteer(id, session.user.id, session.user.name ?? "NGO");
+  const outcome = await autoAssignVolunteer(id, session.user.id, session.user.name ?? "NGO", claimedItems);
 
   // Hard failure — listing was NOT claimed
   if (!outcome.ok && !outcome.claimed) {

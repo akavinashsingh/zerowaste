@@ -1,7 +1,7 @@
 import mongoose, { Document, Model, Schema, Types } from "mongoose";
 
 export type DemandUrgency = "low" | "medium" | "high";
-export type DemandStatus = "open" | "fulfilled" | "expired";
+export type DemandStatus = "open" | "accepted" | "fulfilled" | "expired";
 
 export interface IFoodDemand extends Document {
   ngoId: Types.ObjectId;
@@ -16,6 +16,11 @@ export interface IFoodDemand extends Document {
     address: string;
   };
   status: DemandStatus;
+  acceptedBy?: Types.ObjectId;
+  acceptedByName?: string;
+  acceptedAt?: Date;
+  /** DemandDelivery document created when donor accepts */
+  deliveryId?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,10 +45,14 @@ const FoodDemandSchema = new Schema<IFoodDemand>(
     },
     status: {
       type: String,
-      enum: ["open", "fulfilled", "expired"],
+      enum: ["open", "accepted", "fulfilled", "expired"],
       default: "open",
       index: true,
     },
+    acceptedBy: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    acceptedByName: { type: String, trim: true },
+    acceptedAt: { type: Date },
+    deliveryId: { type: Schema.Types.ObjectId, ref: "DemandDelivery" },
   },
   { timestamps: true },
 );

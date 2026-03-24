@@ -45,8 +45,25 @@ type SessionUser = {
   location?: { lat: number; lng: number };
 };
 
-type Tab = "available" | "active" | "completed";
+type Tab = "available" | "active" | "completed" | "demands";
 type Toast = { id: number; message: string; type: "success" | "error" };
+
+type DemandDeliveryStatus = "open" | "assigned" | "picked_up" | "delivered";
+
+type DemandTask = {
+  _id: string;
+  demandId: string;
+  donorName: string;
+  ngoName: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  distanceKm: number | null;
+  payoutAmount: number | null;
+  status: DemandDeliveryStatus;
+  assignedAt?: string;
+  pickedUpAt?: string;
+  deliveredAt?: string;
+};
 
 let toastId = 0;
 
@@ -90,8 +107,13 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
   const [isAccepting, setIsAccepting] = useState<Record<string, boolean>>({});
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [routeTask, setRouteTask] = useState<Task | null>(null);
-  const [otpModal, setOtpModal] = useState<{ taskId: string; type: "pickup" | "delivery" } | null>(null);
+  const [otpModal, setOtpModal] = useState<{ taskId: string; type: "pickup" | "delivery"; mode?: "demand" } | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  // Demand delivery state
+  const [availableDemands, setAvailableDemands] = useState<DemandTask[]>([]);
+  const [activeDemandTasks, setActiveDemandTasks] = useState<DemandTask[]>([]);
+  const [completedDemandTasks, setCompletedDemandTasks] = useState<DemandTask[]>([]);
+  const [isAcceptingDemand, setIsAcceptingDemand] = useState<Record<string, boolean>>({});
 
   const volunteerLocation = sessionUser.location;
 
@@ -112,19 +134,28 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
         ? `/api/listings/tasks?lat=${volunteerLocation.lat}&lng=${volunteerLocation.lng}`
         : "/api/listings/tasks";
 
-      const [tasksRes, myTasksRes, walletRes] = await Promise.all([
+      const [tasksRes, myTasksRes, walletRes, availDemandsRes, myDemandsRes, completedDemandsRes] = await Promise.all([
         fetch(tasksUrl, { cache: "no-store" }),
         fetch("/api/listings/my-tasks", { cache: "no-store" }),
         fetch("/api/wallet", { cache: "no-store" }),
+        fetch("/api/demands/deliveries?type=available", { cache: "no-store" }),
+        fetch("/api/demands/deliveries?type=mine", { cache: "no-store" }),
+        fetch("/api/demands/deliveries?type=completed", { cache: "no-store" }),
       ]);
 
       const tasksData = (await tasksRes.json()) as { tasks?: Task[] };
       const myTasksData = (await myTasksRes.json()) as { tasks?: Task[] };
       const walletData = (await walletRes.json()) as { balance?: number };
+      const availDemandsData = (await availDemandsRes.json()) as { deliveries?: DemandTask[] };
+      const myDemandsData = (await myDemandsRes.json()) as { deliveries?: DemandTask[] };
+      const completedDemandsData = (await completedDemandsRes.json()) as { deliveries?: DemandTask[] };
 
       setAvailableTasks(tasksData.tasks ?? []);
       setMyTasks(myTasksData.tasks ?? []);
       setWalletBalance(walletData.balance ?? 0);
+      setAvailableDemands(availDemandsData.deliveries ?? []);
+      setActiveDemandTasks(myDemandsData.deliveries ?? []);
+      setCompletedDemandTasks(completedDemandsData.deliveries ?? []);
     } catch {
       addToast("Unable to load tasks.", "error");
     } finally {
@@ -163,6 +194,56 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
       "success",
     );
   }
+
+  async function handleAcceptDemandTask(deliveryId: string) {
+    setIsAcceptingDemand((s) => ({ ...s, [deliveryId]: true }));
+    const snapshot = availableDemands.find((d) => d._id === deliveryId);
+    setAvailableDemands((c) => c.filter((d) => d._id !== deliveryId));
+    try {
+      const res = await fetch(`/api/demands/deliveries/${deliveryId}/assign`, { method: "POST" });
+      const data = (await res.json()) as { deliveryId?: string; status?: string; payoutAmount?: number; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to accept demand delivery.");
+      if (snapshot) {
+        const updated: DemandTask = { ...snapshot, status: "assigned", payoutAmount: data.payoutAmount ?? null };
+        setActiveDemandTasks((c) => [updated, ...c]);
+      }
+      setActiveTab("demands");
+      addToast("Demand task accepted! Check your OTP section and head to the donor.", "success");
+    } catch (err) {
+      if (snapshot) setAvailableDemands((c) => [snapshot, ...c]);
+      addToast(err instanceof Error ? err.message : "Failed to accept demand delivery.", "error");
+    } finally {
+      setIsAcceptingDemand((s) => ({ ...s, [deliveryId]: false }));
+    }
+  }
+
+  function handleDemandOtpSuccess(deliveryId: string, newStatus: "picked_up" | "delivered") {
+    setOtpModal(null);
+    setActiveDemandTasks((c) =>
+      c.map((d) => (d._id === deliveryId ? { ...d, status: newStatus } : d)),
+    );
+    if (newStatus === "delivered") {
+      // Move to completed after a short delay
+      window.setTimeout(() => {
+        setActiveDemandTasks((c) => {
+          const done = c.find((d) => d._id === deliveryId);
+          if (done) setCompletedDemandTasks((prev) =>
+            prev.some((d) => d._id === deliveryId)
+              ? prev
+              : [{ ...done, status: "delivered" }, ...prev],
+          );
+          return c.filter((d) => d._id !== deliveryId);
+        });
+      }, 800);
+    }
+    addToast(
+      newStatus === "picked_up"
+        ? "Demand pickup confirmed! Head to the NGO."
+        : "Demand delivery complete! Payment will be credited to your wallet.",
+      "success",
+    );
+  }
+
 
   const activeTasks = myTasks.filter((t) => t.status === "claimed" || t.status === "picked_up");
   const completedTasks = myTasks.filter((t) => t.status === "delivered");
@@ -284,6 +365,9 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
         .vd-meta-row { display:flex; align-items:center; gap:5px; font-size:0.75rem; color:#6b6560; }
         .vd-meta-row span { font-weight:600; color:#2c2820; }
 
+        /* Demand delivery badge */
+        .vd-demand-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:100px; font-size:0.65rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; background:#eff6ff; color:#1e40af; border:1px solid rgba(30,64,175,0.15); }
+
         /* Empty state */
         .vd-empty { text-align:center; padding:3rem 2rem; background:white; border-radius:20px; border:1.5px dashed rgba(44,40,32,0.1); }
         .vd-empty-icon { font-size:2.5rem; margin-bottom:0.75rem; opacity:0.5; }
@@ -392,6 +476,16 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
                 </button>
               );
             })}
+            <button
+              type="button"
+              className={`vd-tab${activeTab === "demands" ? " active" : ""}`}
+              onClick={() => setActiveTab("demands")}
+            >
+              Demand Tasks
+              {!isLoading && (availableDemands.length + activeDemandTasks.length) > 0 && (
+                <span className="vd-tab-count">{availableDemands.length + activeDemandTasks.length}</span>
+              )}
+            </button>
             <button
               type="button"
               className="vd-tab vd-tab-refresh"
@@ -515,7 +609,7 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
                 <div className="vd-empty-sub">Accept a task from the Available tab to get started.</div>
               </div>
             )
-          ) : (
+          ) : activeTab === "completed" ? (
             completedTasks.length ? (
               <div className="vd-grid">
                 {completedTasks.map((task) => (
@@ -529,6 +623,185 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
                 <div className="vd-empty-sub">Complete your first delivery to see it here.</div>
               </div>
             )
+          ) : (
+            /* Demands Tab */
+            <>
+              {/* Available demand deliveries */}
+              <div style={{ marginBottom: "1.5rem" }}>
+                <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 800, fontSize: "0.9rem", color: "#2c2820", marginBottom: "0.75rem", letterSpacing: "-0.01em" }}>
+                  Available Demand Tasks <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: "0.72rem", color: "#a09a94", fontWeight: 400 }}>({availableDemands.length})</span>
+                </div>
+                {availableDemands.length === 0 ? (
+                  <div className="vd-empty" style={{ padding: "1.5rem" }}>
+                    <div className="vd-empty-icon">📋</div>
+                    <div className="vd-empty-title">No demand tasks available</div>
+                    <div className="vd-empty-sub">When donors accept NGO demands, delivery tasks appear here.</div>
+                  </div>
+                ) : (
+                  <div className="vd-grid">
+                    {availableDemands.map((demand) => (
+                      <div key={demand._id} className="vd-card">
+                        <div className="vd-card-top">
+                          <div className="vd-card-badges">
+                            <span className="vd-demand-badge">📋 Demand Delivery</span>
+                          </div>
+                          <div className="vd-card-title">{demand.ngoName} needs food</div>
+                          <div className="vd-card-qty">Collect from donor and deliver to NGO</div>
+
+                          <div className="vd-route">
+                            <div className="vd-route-row">
+                              <div className="vd-route-dot pickup" style={{ marginTop: 5 }} />
+                              <div>
+                                <div className="vd-route-label">Pickup from</div>
+                                <div className="vd-route-name">{demand.donorName}</div>
+                                <div className="vd-route-addr">{demand.pickupAddress}</div>
+                              </div>
+                            </div>
+                            <div className="vd-route-row">
+                              <div className="vd-route-dot dropoff" style={{ marginTop: 5 }} />
+                              <div>
+                                <div className="vd-route-label">Drop-off at</div>
+                                <div className="vd-route-name">{demand.ngoName}</div>
+                                <div className="vd-route-addr">{demand.dropoffAddress}</div>
+                                {demand.distanceKm != null && (
+                                  <div className="vd-route-km">~{demand.distanceKm.toFixed(1)} km total</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {demand.distanceKm != null && (
+                            <div className="vd-payout">
+                              💰 Est. ₹{Math.max(Math.round(demand.distanceKm * 10), 50)} for this delivery
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="vd-card-footer">
+                          <button
+                            type="button"
+                            className="vd-btn-primary"
+                            disabled={isAcceptingDemand[demand._id]}
+                            onClick={() => void handleAcceptDemandTask(demand._id)}
+                          >
+                            {isAcceptingDemand[demand._id] ? "Accepting…" : "Accept Demand Task"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Active demand deliveries */}
+              <div style={{ marginBottom: "1.5rem" }}>
+                <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 800, fontSize: "0.9rem", color: "#2c2820", marginBottom: "0.75rem", letterSpacing: "-0.01em" }}>
+                  My Active Demand Tasks <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: "0.72rem", color: "#a09a94", fontWeight: 400 }}>({activeDemandTasks.length})</span>
+                </div>
+                {activeDemandTasks.length === 0 ? (
+                  <div className="vd-empty" style={{ padding: "1.5rem" }}>
+                    <div className="vd-empty-title">No active demand tasks</div>
+                    <div className="vd-empty-sub">Accept a demand task above to see it here.</div>
+                  </div>
+                ) : (
+                  <div className="vd-grid">
+                    {activeDemandTasks.map((demand) => (
+                      <div key={demand._id} className="vd-card">
+                        <div className="vd-status-strip">
+                          <span className={`vd-status-pill ${demand.status === "assigned" ? "claimed" : "picked_up"}`}>
+                            <span className="vd-status-dot" />
+                            {demand.status === "assigned" ? "Awaiting Pickup" : "En Route to NGO"}
+                          </span>
+                          <span className="vd-demand-badge" style={{ marginLeft: "auto" }}>Demand</span>
+                        </div>
+
+                        <div className="vd-card-top" style={{ paddingTop: "0.5rem" }}>
+                          <div className="vd-card-title">{demand.ngoName}</div>
+                          {demand.payoutAmount != null && (
+                            <div className="vd-payout" style={{ marginBottom: "0.625rem" }}>
+                              💰 ₹{demand.payoutAmount} payout on delivery
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="vd-contacts">
+                          <div className="vd-contact">
+                            <div className="vd-contact-icon donor">🏠</div>
+                            <div className="vd-contact-body">
+                              <div className="vd-contact-name">{demand.donorName}</div>
+                              <div className="vd-contact-detail">{demand.pickupAddress} · Pickup</div>
+                            </div>
+                          </div>
+                          <div className="vd-contact">
+                            <div className="vd-contact-icon ngo">🏢</div>
+                            <div className="vd-contact-body">
+                              <div className="vd-contact-name">{demand.ngoName}</div>
+                              <div className="vd-contact-detail">{demand.dropoffAddress} · Drop-off</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="vd-card-footer">
+                          {demand.status === "assigned" && (
+                            <button
+                              type="button"
+                              className="vd-btn-primary vd-btn-blue"
+                              onClick={() => setOtpModal({ taskId: demand._id, type: "pickup", mode: "demand" })}
+                            >
+                              Mark as Picked Up (OTP)
+                            </button>
+                          )}
+                          {demand.status === "picked_up" && (
+                            <button
+                              type="button"
+                              className="vd-btn-primary vd-btn-purple"
+                              onClick={() => setOtpModal({ taskId: demand._id, type: "delivery", mode: "demand" })}
+                            >
+                              Mark as Delivered (OTP)
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Completed demand deliveries */}
+              {completedDemandTasks.length > 0 && (
+                <div>
+                  <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 800, fontSize: "0.9rem", color: "#2c2820", marginBottom: "0.75rem", letterSpacing: "-0.01em" }}>
+                    Completed Demand Tasks
+                  </div>
+                  <div className="vd-grid">
+                    {completedDemandTasks.map((demand) => (
+                      <div key={demand._id} className="vd-completed-card">
+                        <div className="vd-completed-header">
+                          <div>
+                            <div className="vd-card-title" style={{ marginBottom: 2 }}>{demand.ngoName}</div>
+                            <span className="vd-demand-badge">Demand Delivery</span>
+                          </div>
+                          {demand.payoutAmount != null ? (
+                            <div className="vd-earned-chip">+₹{demand.payoutAmount}</div>
+                          ) : (
+                            <span style={{ display: "inline-flex", padding: "3px 10px", borderRadius: 100, background: "#f0fdf4", fontSize: "0.7rem", fontWeight: 700, color: "#15803d" }}>
+                              Delivered
+                            </span>
+                          )}
+                        </div>
+                        <div className="vd-completed-meta">
+                          <div className="vd-meta-row">🏠 Donor: <span>{demand.donorName}</span></div>
+                          <div className="vd-meta-row">🏢 NGO: <span>{demand.ngoName}</span></div>
+                          {demand.deliveredAt && (
+                            <div className="vd-meta-row">✅ Delivered: <span>{new Date(demand.deliveredAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span></div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -548,7 +821,12 @@ export default function VolunteerDashboardClient({ sessionUser }: { sessionUser:
         <OtpVerifyModal
           taskId={otpModal.taskId}
           type={otpModal.type}
-          onSuccess={(newStatus) => handleOtpSuccess(otpModal.taskId, newStatus)}
+          mode={otpModal.mode ?? "listing"}
+          onSuccess={(newStatus) =>
+            otpModal.mode === "demand"
+              ? handleDemandOtpSuccess(otpModal.taskId, newStatus)
+              : handleOtpSuccess(otpModal.taskId, newStatus)
+          }
           onClose={() => setOtpModal(null)}
         />
       )}
@@ -723,11 +1001,13 @@ function CompletedTaskCard({ task }: { task: Task }) {
 function OtpVerifyModal({
   taskId,
   type,
+  mode = "listing",
   onSuccess,
   onClose,
 }: {
   taskId: string;
   type: "pickup" | "delivery";
+  mode?: "listing" | "demand";
   onSuccess: (newStatus: "picked_up" | "delivered") => void;
   onClose: () => void;
 }) {
@@ -770,10 +1050,14 @@ function OtpVerifyModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/otp/verify", {
+      const endpoint = mode === "demand" ? "/api/otp/verify-demand" : "/api/otp/verify";
+      const body = mode === "demand"
+        ? { deliveryId: taskId, code, type }
+        : { listingId: taskId, code, type };
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listingId: taskId, code, type }),
+        body: JSON.stringify(body),
       });
       const data = (await res.json()) as { status?: string; error?: string; attemptsLeft?: number };
       if (!res.ok) {

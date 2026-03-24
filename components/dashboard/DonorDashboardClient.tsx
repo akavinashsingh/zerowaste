@@ -13,6 +13,21 @@ import { useSocket } from "@/hooks/useSocket";
 
 /* -- types -- */
 type FoodItem = { name: string; quantity: string; unit: string };
+
+type NgoFoodDemand = {
+  _id: string;
+  ngoName: string;
+  mealsRequired: number;
+  foodType?: string;
+  urgency: "low" | "medium" | "high";
+  status: "open" | "accepted" | "fulfilled" | "expired";
+  acceptedByName?: string;
+  deliveryId?: string;
+  deliveryStatus?: "open" | "assigned" | "picked_up" | "delivered";
+  location: { lat: number; lng: number; address: string };
+  distanceKm?: number;
+  createdAt: string;
+};
 type Listing = {
   _id: string;
   foodItems: FoodItem[];
@@ -86,6 +101,11 @@ export default function DonorDashboard({
   const [loadingListings, setLoadingListings] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [ngoDemands, setNgoDemands] = useState<NgoFoodDemand[]>([]);
+  const [demandsLoading, setDemandsLoading] = useState(true);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [demandError, setDemandError] = useState<string | null>(null);
+  const [otpView, setOtpView] = useState<{ deliveryId: string; code: string | null; loading: boolean } | null>(null);
   const { socketRef } = useSocket();
 
   const fetchListings = useCallback(async () => {
@@ -110,6 +130,25 @@ export default function DonorDashboard({
     void fetchListings();
   }, [fetchListings]);
 
+  const fetchDemands = useCallback(async () => {
+    setDemandsLoading(true);
+    try {
+      const url =
+        donorLat && donorLng
+          ? `/api/demands?lat=${donorLat}&lng=${donorLng}&radius=50&status=open`
+          : "/api/demands?status=open";
+      const res = await fetch(url, { cache: "no-store" });
+      const data = (await res.json()) as { demands?: NgoFoodDemand[] };
+      setNgoDemands(data.demands ?? []);
+    } finally {
+      setDemandsLoading(false);
+    }
+  }, [donorLat, donorLng]);
+
+  useEffect(() => {
+    void fetchDemands();
+  }, [fetchDemands]);
+
   // Real-time: refresh when volunteer is assigned or listing status changes
   useEffect(() => {
     const socket = socketRef.current;
@@ -117,11 +156,85 @@ export default function DonorDashboard({
     const refresh = () => void fetchListings();
     socket.on("volunteer_assigned", refresh);
     socket.on("listing_status", refresh);
+
+    // Real-time: update demand card when volunteer is assigned (status changes)
+    const onDeliveryStatus = (data: { demandId: string; deliveryId: string; status: string }) => {
+      setNgoDemands((prev) =>
+        prev.map((d) =>
+          d._id === data.demandId || d.deliveryId === data.deliveryId
+            ? { ...d, deliveryStatus: data.status as NgoFoodDemand["deliveryStatus"] }
+            : d,
+        ),
+      );
+    };
+    socket.on("demand_delivery_status", onDeliveryStatus);
+
+    // Real-time: prepend new NGO demand when received via socket
+    const onNgoDemand = (raw: {
+      demandId: string;
+      ngoName: string;
+      mealsRequired: number;
+      foodType?: string | null;
+      urgency: "low" | "medium" | "high";
+      distanceKm?: number;
+      address: string;
+      createdAt: string;
+    }) => {
+      const demand: NgoFoodDemand = {
+        _id: raw.demandId,
+        ngoName: raw.ngoName,
+        mealsRequired: raw.mealsRequired,
+        foodType: raw.foodType ?? undefined,
+        urgency: raw.urgency,
+        status: "open",
+        location: { lat: 0, lng: 0, address: raw.address },
+        distanceKm: raw.distanceKm,
+        createdAt: raw.createdAt,
+      };
+      setNgoDemands((prev) => [demand, ...prev]);
+    };
+    socket.on("ngo_demand", onNgoDemand);
+
     return () => {
       socket.off("volunteer_assigned", refresh);
       socket.off("listing_status", refresh);
+      socket.off("ngo_demand", onNgoDemand);
+      socket.off("demand_delivery_status", onDeliveryStatus);
     };
   }, [socketRef, fetchListings]);
+
+  async function handleAcceptDemand(demandId: string) {
+    setAcceptingId(demandId);
+    setDemandError(null);
+    try {
+      const res = await fetch(`/api/demands/${demandId}/accept`, { method: "POST" });
+      const data = (await res.json()) as { id?: string; deliveryId?: string; acceptedByName?: string; error?: string };
+      if (!res.ok) {
+        setDemandError(data.error ?? "Failed to accept demand.");
+        return;
+      }
+      setNgoDemands((prev) =>
+        prev.map((d) =>
+          d._id === demandId
+            ? { ...d, status: "accepted" as const, acceptedByName: data.acceptedByName ?? "you", deliveryId: data.deliveryId }
+            : d,
+        ),
+      );
+    } finally {
+      setAcceptingId(null);
+    }
+  }
+
+  async function handleViewOtp(deliveryId: string) {
+    setOtpView({ deliveryId, code: null, loading: true });
+    try {
+      const res = await fetch(`/api/otp/view?listingId=${deliveryId}&type=pickup`, { cache: "no-store" });
+      const data = (await res.json()) as { code?: string | null };
+      setOtpView({ deliveryId, code: data.code ?? null, loading: false });
+    } catch {
+      setOtpView({ deliveryId, code: null, loading: false });
+    }
+  }
 
   async function handleDelete(listingId: string) {
     if (!window.confirm("Delete this listing? This cannot be undone.")) return;
@@ -209,6 +322,25 @@ export default function DonorDashboard({
 
         .dd-skeleton { background:linear-gradient(90deg,#f0ede8 25%,#e8e4df 50%,#f0ede8 75%); background-size:200% 100%; border-radius:14px; animation:shimmer 1.5s infinite; }
         @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+        .dd-demands-sec { margin-top:2.5rem; }
+        .dd-demands-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1rem; }
+        .dd-demand-card { background:white; border-radius:18px; border:1px solid rgba(44,40,32,0.08); padding:1.1rem 1.25rem; box-shadow:0 1px 4px rgba(44,40,32,0.05); transition:all 0.2s; }
+        .dd-demand-card:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(44,40,32,0.09); }
+        .dd-demand-top { display:flex; align-items:flex-start; justify-content:space-between; gap:0.5rem; margin-bottom:0.6rem; }
+        .dd-demand-ngo { font-family:'Fraunces',serif; font-size:0.95rem; font-weight:800; color:#2c2820; }
+        .dd-demand-meals { font-size:0.78rem; color:#6b6560; margin-top:2px; }
+        .dd-demand-urgency { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:100px; font-size:0.68rem; font-weight:700; flex-shrink:0; }
+        .dd-demand-urgency.high { background:#fee2e2; color:#991b1b; }
+        .dd-demand-urgency.medium { background:#fef3c7; color:#92400e; }
+        .dd-demand-urgency.low { background:#dcfce7; color:#166534; }
+        .dd-demand-meta { font-size:0.75rem; color:#6b6560; display:flex; flex-direction:column; gap:3px; margin-top:0.5rem; }
+        .dd-demand-meals-big { font-family:'Fraunces',serif; font-size:1.5rem; font-weight:900; color:#1e40af; line-height:1; }
+        .dd-demand-accept { width:100%; margin-top:0.75rem; padding:0.6rem; background:#1e40af; color:#fff; border:none; border-radius:10px; font-size:0.82rem; font-weight:700; cursor:pointer; transition:background 0.15s; }
+        .dd-demand-accept:hover:not(:disabled) { background:#1d4ed8; }
+        .dd-demand-accept:disabled { opacity:0.55; cursor:not-allowed; }
+        .dd-demand-accepted-chip { display:flex; align-items:center; gap:6px; margin-top:0.75rem; padding:7px 10px; background:#dcfce7; border:1px solid rgba(22,101,52,0.15); border-radius:10px; font-size:0.76rem; color:#166534; font-weight:600; }
+        .dd-demand-taken-chip { display:flex; align-items:center; gap:6px; margin-top:0.75rem; padding:7px 10px; background:#f3f0ea; border:1px solid rgba(44,40,32,0.10); border-radius:10px; font-size:0.76rem; color:#8a837d; font-weight:600; }
 
         @media(max-width:900px) {
           .dd-stats { grid-template-columns:repeat(2,1fr); }
@@ -374,12 +506,147 @@ export default function DonorDashboard({
               })}
             </div>
           )}
+          {/* NGO Demands Section */}
+          <div className="dd-demands-sec">
+            <div className="dd-sec-head">
+              <div className="dd-sec-title">NGO Food Demands</div>
+              <div className="dd-sec-count">{ngoDemands.length} open nearby</div>
+            </div>
+
+            {demandError && (
+              <div style={{ marginBottom: "0.75rem", background: "#fee2e2", color: "#991b1b", borderRadius: 10, padding: "8px 12px", fontSize: "0.8rem" }}>
+                {demandError}
+              </div>
+            )}
+
+            {demandsLoading ? (
+              <div className="dd-demands-grid">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} style={{ borderRadius: 18, overflow: "hidden", background: "white", border: "1px solid rgba(44,40,32,0.08)", padding: "1.1rem 1.25rem" }}>
+                    <div className="dd-skeleton" style={{ height: 16, width: "55%", marginBottom: 8 }} />
+                    <div className="dd-skeleton" style={{ height: 12, width: "80%", marginBottom: 6 }} />
+                    <div className="dd-skeleton" style={{ height: 12, width: "40%" }} />
+                  </div>
+                ))}
+              </div>
+            ) : ngoDemands.length === 0 ? (
+              <div className="dd-empty">
+                <div className="dd-empty-icon">📋</div>
+                <div className="dd-empty-title">No open demands nearby</div>
+                <div className="dd-empty-sub">When NGOs post food requests in your area, they will appear here.</div>
+              </div>
+            ) : (
+              <div className="dd-demands-grid">
+                {ngoDemands.map((demand) => {
+                  const isAccepted = demand.status === "accepted";
+                  const isAcceptedByMe = isAccepted && demand.acceptedByName === "you";
+                  return (
+                    <div key={demand._id} className="dd-demand-card" style={isAccepted ? { opacity: 0.75 } : undefined}>
+                      <div className="dd-demand-top">
+                        <div>
+                          <div className="dd-demand-ngo">{demand.ngoName}</div>
+                          <div className="dd-demand-meals">needs food for people</div>
+                        </div>
+                        <span className={`dd-demand-urgency ${demand.urgency}`}>
+                          {demand.urgency === "high" ? "🔴" : demand.urgency === "medium" ? "🟡" : "🟢"}{" "}
+                          {demand.urgency.charAt(0).toUpperCase() + demand.urgency.slice(1)}
+                        </span>
+                      </div>
+
+                      <div className="dd-demand-meals-big">{demand.mealsRequired} <span style={{ fontSize: "0.85rem", fontWeight: 400, color: "#6b6560" }}>meals</span></div>
+
+                      <div className="dd-demand-meta">
+                        {demand.foodType && (
+                          <div>
+                            <Package size={11} style={{ display: "inline", marginRight: 3 }} />
+                            Prefers: {demand.foodType}
+                          </div>
+                        )}
+                        <div>
+                          <MapPin size={11} style={{ display: "inline", marginRight: 3 }} />
+                          {demand.location.address}
+                        </div>
+                        {demand.distanceKm !== undefined && (
+                          <div>{demand.distanceKm} km away</div>
+                        )}
+                        <div style={{ color: "#a09a94", fontSize: "0.7rem" }}>
+                          Posted {fmtDate(demand.createdAt)}
+                        </div>
+                      </div>
+
+                      {isAcceptedByMe ? (
+                        <div>
+                          <div className="dd-demand-accepted-chip">
+                            <CheckCircle2 size={13} />
+                            {demand.deliveryStatus === "assigned" || demand.deliveryStatus === "picked_up"
+                              ? "Volunteer on the way"
+                              : demand.deliveryStatus === "delivered"
+                              ? "Delivered ✓"
+                              : "You accepted — waiting for volunteer"}
+                          </div>
+                          {demand.deliveryId && (demand.deliveryStatus === "assigned") && (
+                            <button
+                              onClick={() => void handleViewOtp(demand.deliveryId!)}
+                              style={{ marginTop: 6, width: "100%", padding: "0.55rem", background: "#1e40af", color: "#fff", border: "none", borderRadius: 10, fontSize: "0.78rem", fontWeight: 700, cursor: "pointer" }}
+                            >
+                              Show Pickup OTP to Volunteer
+                            </button>
+                          )}
+                        </div>
+                      ) : isAccepted ? (
+                        <div className="dd-demand-taken-chip">
+                          Already accepted by another donor
+                        </div>
+                      ) : (
+                        <button
+                          className="dd-demand-accept"
+                          disabled={acceptingId === demand._id}
+                          onClick={() => void handleAcceptDemand(demand._id)}
+                        >
+                          {acceptingId === demand._id ? (
+                            <><Loader2 size={13} style={{ display: "inline", marginRight: 5, animation: "spin 1s linear infinite" }} />Accepting...</>
+                          ) : (
+                            "Accept Demand"
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       <button className="dd-fab" onClick={() => setShowModal(true)}>
         <Plus size={22} />
       </button>
+
+      {/* OTP overlay for demand pickup */}
+      {otpView && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "#fff", borderRadius: 24, padding: "1.75rem 1.5rem", width: "100%", maxWidth: 340, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: "1.1rem", fontWeight: 900, color: "#2c2820", marginBottom: 6 }}>Your Pickup OTP</div>
+            <div style={{ fontSize: "0.8rem", color: "#6b6560", marginBottom: "1.25rem" }}>Show this code to the volunteer when they arrive to collect food.</div>
+            {otpView.loading ? (
+              <div style={{ fontSize: "2rem", color: "#a09a94" }}>Loading…</div>
+            ) : otpView.code ? (
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: "2.5rem", fontWeight: 900, letterSpacing: "0.15em", color: "#1e40af", background: "#eff6ff", borderRadius: 14, padding: "1rem", marginBottom: "1rem" }}>
+                {otpView.code}
+              </div>
+            ) : (
+              <div style={{ fontSize: "0.85rem", color: "#6b6560", marginBottom: "1rem" }}>No active OTP yet. The volunteer will trigger it when they accept the task.</div>
+            )}
+            <button
+              onClick={() => setOtpView(null)}
+              style={{ padding: "0.6rem 1.5rem", background: "#1e40af", color: "#fff", border: "none", borderRadius: 10, fontSize: "0.85rem", fontWeight: 700, cursor: "pointer" }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <PostFoodModal

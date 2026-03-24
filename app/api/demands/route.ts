@@ -7,6 +7,7 @@ import { connectMongo } from "@/lib/mongodb";
 import { coordinatesToGeoJSON } from "@/lib/distance";
 import { sendNotification } from "@/lib/notify";
 import { createDemandSchema, parseBody } from "@/lib/schemas";
+import DemandDelivery from "@/models/DemandDelivery";
 import FoodDemand from "@/models/FoodDemand";
 import FoodListing from "@/models/FoodListing";
 import User from "@/models/User";
@@ -132,6 +133,7 @@ export async function POST(request: Request) {
 // ---------------------------------------------------------------------------
 // GET /api/demands?lat=&lng=&radius= — fetch open demands near a location
 //     radius defaults to 50 km
+//     ?mine=true — returns only the authenticated NGO's own demands
 // ---------------------------------------------------------------------------
 export async function GET(request: Request) {
   await connectMongo();
@@ -141,6 +143,40 @@ export async function GET(request: Request) {
   const lngParam = url.searchParams.get("lng");
   const radiusKm = Number(url.searchParams.get("radius") ?? "50");
   const statusFilter = url.searchParams.get("status") ?? "open";
+  const mine = url.searchParams.get("mine") === "true";
+
+  if (mine) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id || session.user.role !== "ngo") {
+      return NextResponse.json({ error: "Only NGOs can view their own demands." }, { status: 403 });
+    }
+    const rawDemands = await FoodDemand.find({ ngoId: session.user.id })
+      .sort({ createdAt: -1 })
+      .lean();
+    const normalised = rawDemands.map((doc) => ({
+      ...doc,
+      location: normalizeLocation(doc.location as unknown as RawLocation),
+    }));
+
+    // Attach deliveryStatus from DemandDelivery for demands that have a deliveryId
+    const deliveryIds = normalised.filter((d) => d.deliveryId).map((d) => d.deliveryId!);
+    let deliveryStatusMap: Record<string, string> = {};
+    if (deliveryIds.length > 0) {
+      const deliveries = await DemandDelivery.find({ _id: { $in: deliveryIds } })
+        .select("status")
+        .lean();
+      deliveryStatusMap = Object.fromEntries(
+        deliveries.map((d) => [d._id.toString(), d.status as string]),
+      );
+    }
+
+    const demands = normalised.map((d) =>
+      d.deliveryId
+        ? { ...d, deliveryStatus: deliveryStatusMap[d.deliveryId.toString()] }
+        : d,
+    );
+    return NextResponse.json({ demands });
+  }
 
   if (latParam && lngParam) {
     const lat = Number(latParam);

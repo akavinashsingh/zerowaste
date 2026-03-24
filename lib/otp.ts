@@ -148,8 +148,9 @@ interface SettleWalletParams {
  * volunteer's wallet. Creates a WalletTransaction record for each party.
  * Runs inside a MongoDB session so both updates succeed or both roll back.
  * Non-throwing — errors are logged but do not fail the delivery confirmation.
+ * Exported so demand-delivery flows can reuse the same settlement logic.
  */
-async function settleWallet({ ngoId, volunteerId, payoutAmount, listingId, io }: SettleWalletParams): Promise<void> {
+export async function settleWallet({ ngoId, volunteerId, payoutAmount, listingId, io }: SettleWalletParams): Promise<void> {
   try {
     const session = await mongoose.startSession();
 

@@ -4,13 +4,32 @@ import Image from "next/image";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Sparkles, MapPin, RefreshCw, LogOut } from "lucide-react";
+import { Sparkles, MapPin, RefreshCw, LogOut, Plus, X, Loader2 } from "lucide-react";
 
 import ListingsMap from "@/components/maps/ListingsMap";
+import { useSocket } from "@/hooks/useSocket";
 
 type FoodTypeFilter = "all" | "cooked" | "packaged" | "raw";
 type SortMode = "newest" | "expiring" | "nearest";
 type ListingStatus = "available" | "claimed" | "picked_up" | "delivered" | "expired";
+type DemandUrgency = "low" | "medium" | "high";
+type DemandStatus = "open" | "accepted" | "fulfilled" | "expired";
+
+type FoodDemand = {
+  _id: string;
+  ngoId: string;
+  ngoName: string;
+  mealsRequired: number;
+  foodType?: string;
+  urgency: DemandUrgency;
+  status: DemandStatus;
+  acceptedByName?: string;
+  acceptedAt?: string;
+  deliveryId?: string;
+  deliveryStatus?: string;
+  location: { lat: number; lng: number; address: string };
+  createdAt: string;
+};
 
 type DonorContact = {
   _id: string;
@@ -105,10 +124,14 @@ function formatDateTime(value: string) {
 }
 
 export default function NgoDashboardClient({ sessionUser }: { sessionUser: SessionUser }) {
-  const [activeTab, setActiveTab] = useState<"available" | "claims">("available");
+  const [activeTab, setActiveTab] = useState<"available" | "claims" | "demands">("available");
   const [availableView, setAvailableView] = useState<"card" | "map">("card");
   const [availableListings, setAvailableListings] = useState<Listing[]>([]);
   const [claimedListings, setClaimedListings] = useState<Listing[]>([]);
+  const [myDemands, setMyDemands] = useState<FoodDemand[]>([]);
+  const [demandsLoading, setDemandsLoading] = useState(false);
+  const [showDemandModal, setShowDemandModal] = useState(false);
+  const [deliveryOtp, setDeliveryOtp] = useState<{ deliveryId: string; code: string | null; loading: boolean } | null>(null);
   const [filterFoodType, setFilterFoodType] = useState<FoodTypeFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>(sessionUser.location ? "nearest" : "newest");
   const [isLoading, setIsLoading] = useState(true);
@@ -118,6 +141,7 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
   const [now, setNow] = useState(Date.now());
   const [selectedMapListing, setSelectedMapListing] = useState<Listing | null>(null);
 
+  const { socketRef } = useSocket();
   const ngoDisplayName = sessionUser.name?.trim() || "NGO";
 
   const ngoLocation = sessionUser.location;
@@ -185,6 +209,68 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
   useEffect(() => {
     void loadListings();
   }, [loadListings]);
+
+  const loadDemands = useCallback(async () => {
+    setDemandsLoading(true);
+    try {
+      const res = await fetch("/api/demands?mine=true", { cache: "no-store" });
+      const data = (await res.json()) as { demands?: FoodDemand[] };
+      setMyDemands(data.demands ?? []);
+    } finally {
+      setDemandsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "demands") {
+      void loadDemands();
+    }
+  }, [activeTab, loadDemands]);
+
+  // Real-time: update demand card when a donor accepts or delivery status changes
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    const onDemandAccepted = (data: { demandId: string; donorName: string; acceptedAt?: string }) => {
+      setMyDemands((prev) =>
+        prev.map((d) =>
+          d._id === data.demandId
+            ? { ...d, status: "accepted" as const, acceptedByName: data.donorName, acceptedAt: data.acceptedAt }
+            : d,
+        ),
+      );
+    };
+
+    const onDeliveryStatus = (data: { deliveryId: string; status: string; isDemand?: boolean }) => {
+      if (!data.isDemand) return;
+      setMyDemands((prev) =>
+        prev.map((d) =>
+          d.deliveryId === data.deliveryId
+            ? { ...d, deliveryStatus: data.status, status: data.status === "delivered" ? ("fulfilled" as const) : d.status }
+            : d,
+        ),
+      );
+    };
+
+    socket.on("demand_accepted", onDemandAccepted);
+    socket.on("demand_delivery_status", onDeliveryStatus);
+    return () => {
+      socket.off("demand_accepted", onDemandAccepted);
+      socket.off("demand_delivery_status", onDeliveryStatus);
+    };
+  }, [socketRef]);
+
+  async function handleViewDeliveryOtp(deliveryId: string) {
+    setDeliveryOtp({ deliveryId, code: null, loading: true });
+    try {
+      const res = await fetch(`/api/otp/view?listingId=${deliveryId}&type=delivery`);
+      const data = (await res.json()) as { code?: string; error?: string };
+      setDeliveryOtp({ deliveryId, code: data.code ?? null, loading: false });
+    } catch {
+      setDeliveryOtp({ deliveryId, code: null, loading: false });
+    }
+  }
 
   const filteredAvailableListings = useMemo(() => {
     const base = [...availableListings].filter((listing) => (filterFoodType === "all" ? true : listing.foodType === filterFoodType));
@@ -315,6 +401,25 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
         .nd-pane { background:#fff; border:1px solid rgba(44,40,32,0.08); border-radius:20px; padding:1rem; }
         .nd-empty { background:#fff; border:1.5px dashed rgba(44,40,32,0.12); border-radius:20px; padding:3rem 1.5rem; text-align:center; color:#8a837d; font-size:0.86rem; }
 
+        .nd-demand-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+        .nd-demand-btn { display:inline-flex; align-items:center; gap:6px; padding:0.6rem 1.1rem; background:#1e40af; color:#fff; border:none; border-radius:12px; font-size:0.82rem; font-weight:700; cursor:pointer; }
+        .nd-demand-btn:hover { background:#1d4ed8; }
+        .nd-demand-card { background:#fff; border:1px solid rgba(44,40,32,0.08); border-radius:18px; padding:1.1rem 1.25rem; box-shadow:0 1px 4px rgba(44,40,32,0.05); }
+        .nd-demand-top { display:flex; align-items:flex-start; justify-content:space-between; gap:0.6rem; margin-bottom:0.6rem; }
+        .nd-demand-meals { font-family:'Fraunces',serif; font-size:1.6rem; font-weight:900; color:#2c2820; line-height:1; }
+        .nd-demand-meals-lbl { font-size:0.7rem; color:#8a837d; text-transform:uppercase; letter-spacing:0.06em; font-weight:700; margin-top:2px; }
+        .nd-urgency { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:100px; font-size:0.7rem; font-weight:700; }
+        .nd-urgency.high { background:#fee2e2; color:#991b1b; }
+        .nd-urgency.medium { background:#fef3c7; color:#92400e; }
+        .nd-urgency.low { background:#dcfce7; color:#166534; }
+        .nd-demand-status { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:100px; font-size:0.68rem; font-weight:700; }
+        .nd-demand-status.open { background:#dbeafe; color:#1e40af; }
+        .nd-demand-status.accepted { background:#dcfce7; color:#166534; }
+        .nd-demand-status.fulfilled { background:#ede9fe; color:#5b21b6; }
+        .nd-demand-status.expired { background:#fee2e2; color:#991b1b; }
+        .nd-demand-donor-chip { display:flex; align-items:center; gap:6px; margin-top:0.6rem; padding:7px 10px; background:#f0fdf4; border:1px solid rgba(22,101,52,0.15); border-radius:10px; font-size:0.75rem; color:#166534; font-weight:600; }
+        .nd-demand-meta { font-size:0.76rem; color:#6b6560; margin-top:0.5rem; display:flex; flex-direction:column; gap:3px; }
+
         @media (max-width:1024px) {
           .nd { padding:1.5rem 1rem 5.5rem; }
           .nd-stats { grid-template-columns:repeat(2,1fr); }
@@ -379,12 +484,93 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
             <button type="button" onClick={() => setActiveTab("claims")} className={`nd-tab ${activeTab === "claims" ? "active" : ""}`}>
               My Claims
             </button>
+            <button type="button" onClick={() => setActiveTab("demands")} className={`nd-tab ${activeTab === "demands" ? "active" : ""}`}>
+              My Demands
+            </button>
             <button type="button" onClick={() => void loadListings()} className="nd-tab">
               <RefreshCw size={13} style={{ display: "inline", marginRight: 6 }} /> Refresh
             </button>
           </div>
 
-          {activeTab === "available" ? (
+          {activeTab === "demands" ? (
+            <>
+              <div className="nd-demand-header">
+                <div style={{ fontFamily: "'Fraunces', serif", fontSize: "1rem", fontWeight: 800, color: "#2c2820" }}>
+                  Food Demands
+                </div>
+                <button type="button" className="nd-demand-btn" onClick={() => setShowDemandModal(true)}>
+                  <Plus size={14} /> Post Demand
+                </button>
+              </div>
+
+              {demandsLoading ? (
+                <div className="nd-empty">Loading your demands...</div>
+              ) : myDemands.length === 0 ? (
+                <div className="nd-empty">
+                  <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>📋</div>
+                  <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 700, color: "#2c2820", marginBottom: 6 }}>No demands posted yet</div>
+                  <div style={{ fontSize: "0.82rem", color: "#8a837d" }}>Post a demand to notify nearby donors of how many meals you need.</div>
+                </div>
+              ) : (
+                <div className="nd-grid">
+                  {myDemands.map((demand) => (
+                    <div key={demand._id} className="nd-demand-card">
+                      <div className="nd-demand-top">
+                        <div>
+                          <div className="nd-demand-meals">{demand.mealsRequired}</div>
+                          <div className="nd-demand-meals-lbl">Meals Required</div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end" }}>
+                          <span className={`nd-urgency ${demand.urgency}`}>
+                            {demand.urgency === "high" ? "🔴" : demand.urgency === "medium" ? "🟡" : "🟢"} {demand.urgency.charAt(0).toUpperCase() + demand.urgency.slice(1)}
+                          </span>
+                          <span className={`nd-demand-status ${demand.status}`}>
+                            {demand.status === "accepted" ? "✓ Accepted" : demand.status.charAt(0).toUpperCase() + demand.status.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="nd-demand-meta">
+                        {demand.foodType && <div>Food type: {demand.foodType}</div>}
+                        <div><MapPin size={11} style={{ display: "inline", marginRight: 3 }} />{demand.location.address}</div>
+                        <div>Posted {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(demand.createdAt))}</div>
+                      </div>
+                      {demand.status === "accepted" && demand.acceptedByName && (
+                        <div className="nd-demand-donor-chip">
+                          <span style={{ fontSize: "0.9rem" }}>✅</span>
+                          Accepted by {demand.acceptedByName}
+                          {demand.acceptedAt && (
+                            <span style={{ fontWeight: 400, color: "#4ade80", marginLeft: 4 }}>
+                              · {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(demand.acceptedAt))}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {demand.deliveryId && demand.deliveryStatus === "picked_up" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleViewDeliveryOtp(demand.deliveryId!)}
+                          style={{
+                            marginTop: "0.65rem",
+                            width: "100%",
+                            border: "none",
+                            borderRadius: 12,
+                            padding: "0.62rem 0.9rem",
+                            background: "#7c3aed",
+                            color: "#fff",
+                            fontSize: "0.82rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Show Delivery OTP to Volunteer
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : activeTab === "available" ? (
             <>
               <div className="nd-filter">
                 <label>
@@ -565,6 +751,249 @@ export default function NgoDashboardClient({ sessionUser }: { sessionUser: Sessi
           )}
         </div>
       </div>
+
+      {showDemandModal && (
+        <PostDemandModal
+          sessionUser={sessionUser}
+          onClose={() => setShowDemandModal(false)}
+          onSuccess={() => {
+            setShowDemandModal(false);
+            void loadDemands();
+            if (activeTab !== "demands") setActiveTab("demands");
+          }}
+        />
+      )}
+
+      {deliveryOtp && (
+        <div
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 999,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem",
+          }}
+          onClick={() => setDeliveryOtp(null)}
+        >
+          <div
+            style={{
+              background: "#fff", borderRadius: 20, padding: "2rem", maxWidth: 380, width: "100%",
+              textAlign: "center", position: "relative",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setDeliveryOtp(null)}
+              style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", cursor: "pointer", color: "#8a837d" }}
+            >
+              <X size={18} />
+            </button>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: "1.1rem", fontWeight: 800, color: "#2c2820", marginBottom: 6 }}>
+              Delivery OTP
+            </div>
+            <div style={{ fontSize: "0.8rem", color: "#6b6560", marginBottom: "1.25rem" }}>
+              Show this code to the volunteer when they arrive to deliver the food.
+            </div>
+            {deliveryOtp.loading ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: "1rem" }}>
+                <Loader2 size={28} style={{ animation: "spin 1s linear infinite" }} />
+              </div>
+            ) : deliveryOtp.code ? (
+              <div style={{
+                fontFamily: "'Fraunces',serif", fontSize: "2.8rem", fontWeight: 900,
+                letterSpacing: "0.25em", color: "#7c3aed",
+                background: "#f5f3ff", borderRadius: 14, padding: "1rem 1.5rem", margin: "0 auto",
+              }}>
+                {deliveryOtp.code}
+              </div>
+            ) : (
+              <div style={{ color: "#991b1b", fontSize: "0.85rem" }}>Could not load OTP. Please try again.</div>
+            )}
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+/* =================================================================
+   POST DEMAND MODAL
+================================================================= */
+function PostDemandModal({
+  sessionUser,
+  onClose,
+  onSuccess,
+}: {
+  sessionUser: SessionUser;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [mealsRequired, setMealsRequired] = useState("");
+  const [foodType, setFoodType] = useState("");
+  const [urgency, setUrgency] = useState<DemandUrgency>("medium");
+  const [address, setAddress] = useState("");
+  const [lat, setLat] = useState(sessionUser.location ? String(sessionUser.location.lat) : "");
+  const [lng, setLng] = useState(sessionUser.location ? String(sessionUser.location.lng) : "");
+  const [locLoading, setLocLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  function detectLoc() {
+    if (!("geolocation" in navigator)) return;
+    setLocLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (p) => {
+        const newLat = p.coords.latitude.toFixed(6);
+        const newLng = p.coords.longitude.toFixed(6);
+        setLat(newLat);
+        setLng(newLng);
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${newLat}&lon=${newLng}`,
+            { headers: { "Accept-Language": "en" } },
+          );
+          const data = (await res.json()) as { display_name?: string };
+          if (data.display_name) setAddress(data.display_name);
+        } catch { /* leave address as-is */ }
+        setLocLoading(false);
+      },
+      () => setLocLoading(false),
+    );
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    const meals = parseInt(mealsRequired, 10);
+    if (!meals || meals < 1) { setError("Enter a valid number of meals."); return; }
+    if (!address.trim()) { setError("Please enter or detect your location."); return; }
+    if (!lat || !lng) { setError("Please detect or enter coordinates."); return; }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/demands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mealsRequired: meals,
+          foodType: foodType.trim() || undefined,
+          urgency,
+          location: { lat: parseFloat(lat), lng: parseFloat(lng), address: address.trim() },
+        }),
+      });
+      const data = (await res.json()) as { id?: string; error?: string };
+      if (!res.ok) { setError(data.error ?? "Failed to post demand."); return; }
+      onSuccess();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <div style={{ background: "#fff", borderRadius: 24, padding: "1.75rem 1.5rem", width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+          <div style={{ fontFamily: "'Fraunces',serif", fontSize: "1.2rem", fontWeight: 900, color: "#2c2820" }}>Post a Food Demand</div>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a837d", padding: 4 }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => void handleSubmit(e)} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div>
+            <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#8a837d", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>
+              Meals Required *
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={mealsRequired}
+              onChange={(e) => setMealsRequired(e.target.value)}
+              placeholder="e.g. 150"
+              required
+              style={{ width: "100%", height: 44, border: "1.5px solid rgba(44,40,32,0.15)", borderRadius: 12, padding: "0 0.75rem", fontSize: "0.9rem", color: "#2c2820", background: "#faf8f4", boxSizing: "border-box" }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#8a837d", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>
+              Food Type (optional)
+            </label>
+            <select
+              value={foodType}
+              onChange={(e) => setFoodType(e.target.value)}
+              style={{ width: "100%", height: 44, border: "1.5px solid rgba(44,40,32,0.15)", borderRadius: 12, padding: "0 0.75rem", fontSize: "0.9rem", color: "#2c2820", background: "#faf8f4" }}
+            >
+              <option value="">Any</option>
+              <option value="cooked">Cooked</option>
+              <option value="packaged">Packaged</option>
+              <option value="raw">Raw</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#8a837d", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>
+              Urgency *
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              {(["low", "medium", "high"] as DemandUrgency[]).map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => setUrgency(u)}
+                  style={{
+                    flex: 1, padding: "0.55rem 0", borderRadius: 10, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", border: "1.5px solid",
+                    background: urgency === u ? (u === "high" ? "#fee2e2" : u === "medium" ? "#fef3c7" : "#dcfce7") : "#faf8f4",
+                    color: urgency === u ? (u === "high" ? "#991b1b" : u === "medium" ? "#92400e" : "#166534") : "#8a837d",
+                    borderColor: urgency === u ? (u === "high" ? "#fca5a5" : u === "medium" ? "#fde68a" : "#86efac") : "rgba(44,40,32,0.12)",
+                  }}
+                >
+                  {u === "high" ? "🔴" : u === "medium" ? "🟡" : "🟢"} {u.charAt(0).toUpperCase() + u.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#8a837d", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>
+              Pickup / Delivery Location *
+            </label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Your NGO address"
+                style={{ flex: 1, height: 44, border: "1.5px solid rgba(44,40,32,0.15)", borderRadius: 12, padding: "0 0.75rem", fontSize: "0.86rem", color: "#2c2820", background: "#faf8f4" }}
+              />
+              <button
+                type="button"
+                onClick={detectLoc}
+                disabled={locLoading}
+                style={{ padding: "0 0.9rem", height: 44, border: "1.5px solid rgba(44,40,32,0.15)", borderRadius: 12, background: "#f0fdf4", color: "#1e40af", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                {locLoading ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : "Detect"}
+              </button>
+            </div>
+            {lat && lng && (
+              <div style={{ fontSize: "0.72rem", color: "#8a837d" }}>
+                Coordinates: {parseFloat(lat).toFixed(4)}, {parseFloat(lng).toFixed(4)}
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div style={{ background: "#fee2e2", color: "#991b1b", borderRadius: 10, padding: "8px 12px", fontSize: "0.8rem" }}>{error}</div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{ width: "100%", padding: "0.75rem", background: "#1e40af", color: "#fff", border: "none", borderRadius: 12, fontSize: "0.9rem", fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1, marginTop: 4 }}
+          >
+            {submitting ? "Posting..." : "Post Demand"}
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }

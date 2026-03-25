@@ -122,6 +122,9 @@ pnpm dev      # start custom Next + Socket.IO server in dev mode
 pnpm build    # build Next app
 pnpm start    # start production server
 pnpm lint     # run ESLint
+pnpm cap:add:android   # one-time: create Android project
+pnpm cap:sync          # sync Capacitor config/plugins to Android
+pnpm cap:open:android  # open Android Studio project
 ```
 
 ### Data/seed scripts
@@ -132,6 +135,43 @@ npx tsx scripts/seed-test-data.ts          # seed richer donor/ngo/volunteer dat
 node ./scripts/reset-test-bookings.js      # reset claimed/picked/delivered listings
 node ./scripts/reset-test-bookings.js --delete-listings
 ```
+
+## Android APK (Capacitor)
+
+This project uses server routes + Socket.IO, so the Android app is configured as a native wrapper that loads your deployed URL.
+
+1. Set `CAPACITOR_SERVER_URL` in `.env.local` to your public app URL.
+2. Create Android platform files (first time only):
+
+```bash
+pnpm cap:add:android
+```
+
+3. Sync Capacitor config:
+
+```bash
+pnpm cap:sync
+```
+
+4. Open Android Studio:
+
+```bash
+pnpm cap:open:android
+```
+
+5. Build APK in Android Studio:
+  - Build -> Build Bundle(s) / APK(s) -> Build APK(s)
+
+Optional CLI builds after the Android project exists:
+
+```bash
+pnpm android:build:debug
+pnpm android:build:release
+```
+
+Typical APK output path:
+- `android/app/build/outputs/apk/debug/app-debug.apk`
+- `android/app/build/outputs/apk/release/app-release.apk`
 
 ## Test Accounts
 

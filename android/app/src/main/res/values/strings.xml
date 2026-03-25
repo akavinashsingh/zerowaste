@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ZeroWaste</string>
+    <string name="title_activity_main">ZeroWaste</string>
+    <string name="package_name">com.zerowaste.app</string>
+    <string name="custom_url_scheme">com.zerowaste.app</string>
+</resources>

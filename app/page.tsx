@@ -283,6 +283,57 @@ export default async function Home() {
         }
         .btn-hero-secondary:hover { background: #fde8d8; transform: translateY(-2px); }
 
+        .btn-download-apk {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.5rem 1.1rem;
+          background: transparent;
+          border: 1.5px solid var(--ff-leaf);
+          color: var(--ff-leaf);
+          border-radius: 8px;
+          font-size: 0.875rem;
+          font-weight: 500;
+          text-decoration: none;
+          transition: background 0.2s, color 0.2s;
+          white-space: nowrap;
+        }
+        .btn-download-apk:hover { background: var(--ff-leaf-light); color: var(--ff-leaf); }
+
+        .btn-hero-apk {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.6rem;
+          padding: 1rem 1.75rem;
+          background: var(--ff-stone);
+          color: #fff;
+          border: none;
+          border-radius: 12px;
+          font-size: 1rem;
+          font-weight: 600;
+          text-decoration: none;
+          cursor: pointer;
+          transition: background 0.2s, transform 0.15s, box-shadow 0.15s;
+          font-family: 'DM Sans', sans-serif;
+        }
+        .btn-hero-apk:hover { background: #1a1612; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(44,40,32,0.25); }
+
+        .btn-cta-apk {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.875rem 1.75rem;
+          background: rgba(255,255,255,0.12);
+          color: #fff;
+          border: 1.5px solid rgba(255,255,255,0.4);
+          border-radius: 10px;
+          font-size: 1rem;
+          font-weight: 600;
+          text-decoration: none;
+          transition: background 0.2s;
+        }
+        .btn-cta-apk:hover { background: rgba(255,255,255,0.22); }
+
         .ff-mini-stats {
           display: flex;
           gap: 2rem;
@@ -951,6 +1002,7 @@ export default async function Home() {
               <li><a href="#join">Join Us</a></li>
             </ul>
             <div className="ff-nav-actions">
+              <a href="/zerowaste.apk" download className="btn-download-apk">⬇ Download App</a>
               <Link href="/login" className="btn-ghost">Login</Link>
               <Link href="/register" className="btn-primary">Get Started →</Link>
               <label htmlFor="ff-mob" className="ff-hamburger" aria-label="Toggle menu">
@@ -967,6 +1019,7 @@ export default async function Home() {
             <div className="ff-mob-cta">
               <Link href="/login" className="btn-ghost">Login</Link>
               <Link href="/register" className="btn-primary">Get Started →</Link>
+              <a href="/zerowaste.apk" download className="btn-download-apk" style={{justifyContent:"center"}}>⬇ Download App</a>
             </div>
           </div>
         </nav>
@@ -997,6 +1050,9 @@ export default async function Home() {
                 <Link href="/register?role=ngo" className="btn-hero-secondary">
                   🤝 Find Food <span style={{marginLeft: 2}}>→</span>
                 </Link>
+                <a href="/zerowaste.apk" download className="btn-hero-apk">
+                  📱 Download App
+                </a>
               </div>
 
               <div className="ff-mini-stats">
@@ -1259,6 +1315,9 @@ export default async function Home() {
             <Link href="/login" className="btn-cta-outline">
               Sign In
             </Link>
+            <a href="/zerowaste.apk" download className="btn-cta-apk">
+              📱 Download Android App
+            </a>
           </div>
         </div>
 

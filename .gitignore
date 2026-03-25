@@ -41,5 +41,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# capacitor/android
+android/local.properties
+android/.gradle/
+android/captures/
+android/.idea/
+
 
 test-roadmap.html

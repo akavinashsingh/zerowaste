@@ -9,6 +9,14 @@ export interface FoodItem {
   unit: string;
 }
 
+export interface DeliveryConfirmation {
+  photo?: string;
+  note?: string;
+  confirmedAt: Date;
+  confirmedByNgoId: Types.ObjectId;
+  confirmedByNgoName: string;
+}
+
 export interface IFoodListing extends Document {
   donorId: Types.ObjectId;
   donorName: string;
@@ -41,6 +49,8 @@ export interface IFoodListing extends Document {
   volunteerAssignedAt?: Date;
   pickedUpAt?: Date;
   deliveredAt?: Date;
+  /** NGO confirmation of receipt after OTP-verified delivery */
+  deliveryConfirmation?: DeliveryConfirmation;
   /** Distance (km) between donor pickup and NGO drop-off, stored when volunteer accepts */
   distanceKm?: number;
   /** Calculated volunteer payout in INR */
@@ -100,6 +110,19 @@ const FoodListingSchema = new Schema<IFoodListing>({
   volunteerAssignedAt: { type: Date, index: true },
   pickedUpAt: { type: Date },
   deliveredAt: { type: Date },
+  deliveryConfirmation: {
+    type: new Schema(
+      {
+        photo: { type: String },
+        note: { type: String, trim: true, maxlength: 500 },
+        confirmedAt: { type: Date, required: true },
+        confirmedByNgoId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        confirmedByNgoName: { type: String, required: true, trim: true },
+      },
+      { _id: false },
+    ),
+    default: undefined,
+  },
   distanceKm: { type: Number, min: 0 },
   payoutAmount: { type: Number, min: 0 },
   payoutNgoId: { type: Schema.Types.ObjectId, ref: "User", index: true },

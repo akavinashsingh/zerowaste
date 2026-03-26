@@ -1,13 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Clock, Phone, Truck, Package, KeyRound, RefreshCw, CheckCircle2, MapPin, Zap } from "lucide-react";
+import Image from "next/image";
+import { Clock, Phone, Truck, Package, KeyRound, RefreshCw, CheckCircle2, MapPin, Zap, Camera, X, Loader2 } from "lucide-react";
 import { useSocket } from "@/hooks/useSocket";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type FoodItem = { name: string; quantity: string; unit: string };
+
+type DeliveryConfirmation = {
+  photo?: string;
+  note?: string;
+  confirmedAt: string;
+  confirmedByNgoName: string;
+};
 
 type Listing = {
   _id: string;
@@ -24,6 +32,7 @@ type Listing = {
   pickedUpAt?: string;
   deliveredAt?: string;
   distanceKm?: number | null;
+  deliveryConfirmation?: DeliveryConfirmation;
 };
 
 type ActivityEvent = {
@@ -112,11 +121,22 @@ function calcEta(distanceKm: number, elapsedMs = 0): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+type ConfirmState = {
+  listingId: string;
+  photo: string | null;      // base64 data URL for preview / upload
+  photoFile: File | null;
+  note: string;
+  submitting: boolean;
+  error: string | null;
+};
+
 export default function NgoClaimsClient() {
   const [claims, setClaims] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [otpMap, setOtpMap] = useState<Record<string, OTPInfo>>({});
   const [eventsMap, setEventsMap] = useState<Record<string, ActivityEvent[]>>({});
+  const [confirmModal, setConfirmModal] = useState<ConfirmState | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { socketRef } = useSocket();
 
   // ── OTP fetch ──────────────────────────────────────────────────────────────
@@ -288,6 +308,50 @@ export default function NgoClaimsClient() {
     };
   }, [socketRef, fetchOTP]);
 
+  function openConfirmModal(listingId: string) {
+    setConfirmModal({ listingId, photo: null, photoFile: null, note: "", submitting: false, error: null });
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setConfirmModal((prev) => prev ? { ...prev, photo: ev.target?.result as string, photoFile: file } : prev);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleConfirmSubmit() {
+    if (!confirmModal) return;
+    setConfirmModal((prev) => prev ? { ...prev, submitting: true, error: null } : prev);
+    try {
+      const res = await fetch(`/api/listings/${confirmModal.listingId}/confirm-delivery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          photo: confirmModal.photo ?? undefined,
+          note: confirmModal.note.trim() || undefined,
+        }),
+      });
+      const data = (await res.json()) as { deliveryConfirmation?: DeliveryConfirmation; error?: string };
+      if (!res.ok) {
+        setConfirmModal((prev) => prev ? { ...prev, submitting: false, error: data.error ?? "Failed to confirm." } : prev);
+        return;
+      }
+      // Update local state
+      if (data.deliveryConfirmation) {
+        const conf = data.deliveryConfirmation;
+        setClaims((prev) =>
+          prev.map((c) => c._id === confirmModal.listingId ? { ...c, deliveryConfirmation: conf } : c),
+        );
+      }
+      setConfirmModal(null);
+    } catch {
+      setConfirmModal((prev) => prev ? { ...prev, submitting: false, error: "Network error. Please try again." } : prev);
+    }
+  }
+
   const active = claims.filter((c) => c.status !== "delivered" && c.status !== "expired");
   const completed = claims.filter((c) => c.status === "delivered");
 
@@ -338,6 +402,32 @@ export default function NgoClaimsClient() {
         .nc-tl-label { font-size:0.78rem; font-weight:600; color:#2c2820; }
         .nc-tl-detail { font-size:0.68rem; color:#6b6560; margin-top:1px; }
         .nc-tl-time { font-size:0.62rem; color:#a09a94; margin-top:1px; }
+
+        /* Confirm receipt */
+        .nc-confirm-btn { display:inline-flex; align-items:center; gap:6px; margin-top:10px; width:100%; justify-content:center; padding:8px 12px; border-radius:11px; border:1.5px solid rgba(22,163,74,0.3); background:#f0fdf4; font-family:'DM Sans',sans-serif; font-size:0.78rem; font-weight:700; color:#15803d; cursor:pointer; transition:all 0.15s; }
+        .nc-confirm-btn:hover { background:#dcfce7; border-color:rgba(22,163,74,0.5); }
+        .nc-confirmed-box { margin-top:10px; padding:10px 12px; border-radius:12px; background:#f0fdf4; border:1.5px solid rgba(22,163,74,0.2); }
+        .nc-confirmed-label { font-size:0.68rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#15803d; margin-bottom:4px; }
+        .nc-confirmed-note { font-size:0.75rem; color:#374151; margin-top:4px; font-style:italic; }
+        .nc-confirmed-time { font-size:0.65rem; color:#6b7280; margin-top:3px; }
+
+        /* Modal overlay */
+        .nc-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; display:flex; align-items:center; justify-content:center; padding:1rem; }
+        .nc-modal { background:white; border-radius:24px; padding:1.75rem 1.5rem; width:100%; max-width:380px; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+        .nc-modal-title { font-family:'Fraunces',serif; font-size:1.15rem; font-weight:900; color:#2c2820; margin-bottom:4px; }
+        .nc-modal-sub { font-size:0.8rem; color:#6b6560; font-weight:300; margin-bottom:1.25rem; }
+        .nc-modal-label { font-size:0.72rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#6b6560; margin-bottom:6px; }
+        .nc-modal-note { width:100%; border:1.5px solid rgba(44,40,32,0.15); border-radius:11px; padding:9px 12px; font-family:'DM Sans',sans-serif; font-size:0.85rem; color:#2c2820; resize:none; outline:none; transition:border-color 0.15s; box-sizing:border-box; }
+        .nc-modal-note:focus { border-color:rgba(22,163,74,0.5); }
+        .nc-photo-upload { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border:1.5px dashed rgba(44,40,32,0.18); border-radius:14px; padding:1.25rem; cursor:pointer; background:#fafaf9; transition:all 0.15s; }
+        .nc-photo-upload:hover { border-color:rgba(22,163,74,0.4); background:#f0fdf4; }
+        .nc-photo-preview { width:100%; border-radius:12px; object-fit:cover; max-height:180px; }
+        .nc-modal-actions { display:flex; gap:10px; margin-top:1.25rem; }
+        .nc-modal-cancel { flex:1; padding:0.65rem; border-radius:11px; border:1.5px solid rgba(44,40,32,0.12); background:white; font-family:'DM Sans',sans-serif; font-size:0.85rem; font-weight:600; color:#6b6560; cursor:pointer; }
+        .nc-modal-submit { flex:2; padding:0.65rem; border-radius:11px; border:none; background:#1a5c38; color:white; font-family:'DM Sans',sans-serif; font-size:0.85rem; font-weight:700; cursor:pointer; transition:background 0.15s; display:flex; align-items:center; justify-content:center; gap:6px; }
+        .nc-modal-submit:hover:not(:disabled) { background:#2d7a50; }
+        .nc-modal-submit:disabled { opacity:0.6; cursor:not-allowed; }
+        .nc-modal-error { margin-top:8px; font-size:0.78rem; color:#dc2626; text-align:center; }
 
         .nc-empty { text-align:center; padding:3rem 2rem; background:white; border-radius:18px; border:1.5px dashed rgba(44,40,32,0.12); }
         .nc-empty-icon { font-size:2.5rem; margin-bottom:0.75rem; opacity:0.35; }
@@ -500,12 +590,14 @@ export default function NgoClaimsClient() {
                   <div className="nc-grid">
                     {completed.map((c) => {
                       const events = (eventsMap[c._id] ?? []).slice().sort((a, b) => a.ts - b.ts);
+                      const conf = c.deliveryConfirmation;
                       return (
-                        <div key={c._id} className="nc-card" style={{ opacity: 0.85 }}>
+                        <div key={c._id} className="nc-card" style={{ opacity: 0.9 }}>
                           <div className="nc-card-top">
                             <div className="nc-card-title">{c.foodItems.map((f) => f.name).join(", ")}</div>
-                            <div className="nc-badge" style={{ background: "#ede9fe", color: "#5b21b6" }}>
-                              <span className="nc-badge-dot" style={{ background: "#8b5cf6" }} />Delivered
+                            <div className="nc-badge" style={{ background: conf ? "#dcfce7" : "#ede9fe", color: conf ? "#15803d" : "#5b21b6" }}>
+                              <span className="nc-badge-dot" style={{ background: conf ? "#22c55e" : "#8b5cf6" }} />
+                              {conf ? "Receipt Confirmed" : "Delivered"}
                             </div>
                           </div>
                           <div className="nc-meta">
@@ -513,8 +605,32 @@ export default function NgoClaimsClient() {
                             <div className="nc-meta-row"><Phone size={12} style={{ color: "#a09a94" }} />From {c.donorName}</div>
                             {c.deliveredAt && <div className="nc-meta-row"><CheckCircle2 size={12} style={{ color: "#8b5cf6" }} />Delivered at {fmtDate(c.deliveredAt)}</div>}
                           </div>
+
+                          {/* Receipt confirmation or prompt */}
+                          {conf ? (
+                            <div className="nc-confirmed-box">
+                              <div className="nc-confirmed-label"><CheckCircle2 size={10} style={{ display: "inline", marginRight: 3 }} />Receipt Confirmed</div>
+                              {conf.photo && (
+                                <Image
+                                  src={conf.photo}
+                                  alt="Delivery photo"
+                                  width={400}
+                                  height={200}
+                                  unoptimized
+                                  style={{ width: "100%", borderRadius: 10, objectFit: "cover", maxHeight: 160, marginTop: 6 }}
+                                />
+                              )}
+                              {conf.note && <div className="nc-confirmed-note">"{conf.note}"</div>}
+                              <div className="nc-confirmed-time">Confirmed at {fmtDate(conf.confirmedAt)}</div>
+                            </div>
+                          ) : (
+                            <button className="nc-confirm-btn" onClick={() => openConfirmModal(c._id)}>
+                              <Camera size={13} /> Confirm Receipt
+                            </button>
+                          )}
+
                           {events.length > 0 && (
-                            <div className="nc-tracker" style={{ opacity: 0.8 }}>
+                            <div className="nc-tracker" style={{ opacity: 0.8, marginTop: 10 }}>
                               <div className="nc-tracker-title" style={{ marginBottom: 8 }}><Zap size={11} /> Timeline</div>
                               <div className="nc-timeline">
                                 {events.map((ev) => (
@@ -539,6 +655,79 @@ export default function NgoClaimsClient() {
           )}
         </div>
       </div>
+
+      {/* Hidden file input for photo upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        style={{ display: "none" }}
+        onChange={handlePhotoChange}
+      />
+
+      {/* Confirm Receipt Modal */}
+      {confirmModal && (
+        <div className="nc-overlay" onClick={(e) => { if (e.target === e.currentTarget) setConfirmModal(null); }}>
+          <div className="nc-modal">
+            <div className="nc-modal-title">Confirm Receipt</div>
+            <div className="nc-modal-sub">Let the donor know the food arrived safely.</div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <div className="nc-modal-label">Photo (optional)</div>
+              {confirmModal.photo ? (
+                <div style={{ position: "relative" }}>
+                  <Image
+                    src={confirmModal.photo}
+                    alt="Preview"
+                    width={400}
+                    height={200}
+                    unoptimized
+                    className="nc-photo-preview"
+                  />
+                  <button
+                    onClick={() => setConfirmModal((prev) => prev ? { ...prev, photo: null, photoFile: null } : prev)}
+                    style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,0.5)", border: "none", borderRadius: "50%", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "white" }}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ) : (
+                <div className="nc-photo-upload" onClick={() => fileInputRef.current?.click()}>
+                  <Camera size={22} style={{ color: "#a09a94" }} />
+                  <span style={{ fontSize: "0.78rem", color: "#6b6560" }}>Tap to add a photo</span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: "0.25rem" }}>
+              <div className="nc-modal-label">Note (optional)</div>
+              <textarea
+                className="nc-modal-note"
+                rows={3}
+                placeholder="e.g. Food received in good condition, distributed to 40 people."
+                value={confirmModal.note}
+                onChange={(e) => setConfirmModal((prev) => prev ? { ...prev, note: e.target.value } : prev)}
+                maxLength={500}
+              />
+            </div>
+
+            {confirmModal.error && <div className="nc-modal-error">{confirmModal.error}</div>}
+
+            <div className="nc-modal-actions">
+              <button className="nc-modal-cancel" onClick={() => setConfirmModal(null)} disabled={confirmModal.submitting}>
+                Cancel
+              </button>
+              <button className="nc-modal-submit" onClick={() => void handleConfirmSubmit()} disabled={confirmModal.submitting}>
+                {confirmModal.submitting ? (
+                  <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Confirming…</>
+                ) : (
+                  <><CheckCircle2 size={14} /> Confirm Receipt</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

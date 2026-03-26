@@ -29,6 +29,12 @@ type NgoFoodDemand = {
   createdAt: string;
 };
 type PartialClaim = { ngoName: string; claimedItems: FoodItem[]; claimedAt: string };
+type DeliveryConfirmation = {
+  photo?: string;
+  note?: string;
+  confirmedAt: string;
+  confirmedByNgoName: string;
+};
 type Listing = {
   _id: string;
   foodItems: FoodItem[];
@@ -45,6 +51,7 @@ type Listing = {
   claimedBy?: { name: string; phone: string } | null;
   assignedVolunteer?: { name: string } | null;
   createdAt: string;
+  deliveryConfirmation?: DeliveryConfirmation;
 };
 
 type DonorStats = {
@@ -160,6 +167,32 @@ export default function DonorDashboard({
     socket.on("volunteer_assigned", refresh);
     socket.on("listing_status", refresh);
 
+    // Real-time: update listing card when NGO confirms delivery receipt
+    const onDeliveryConfirmed = (data: {
+      listingId: string;
+      photo?: string;
+      note?: string;
+      confirmedAt: string;
+      confirmedByNgoName: string;
+    }) => {
+      setListings((prev) =>
+        prev.map((l) =>
+          l._id === data.listingId
+            ? {
+                ...l,
+                deliveryConfirmation: {
+                  photo: data.photo,
+                  note: data.note,
+                  confirmedAt: data.confirmedAt,
+                  confirmedByNgoName: data.confirmedByNgoName,
+                },
+              }
+            : l,
+        ),
+      );
+    };
+    socket.on("delivery_confirmed", onDeliveryConfirmed);
+
     // Real-time: update demand card when volunteer is assigned (status changes)
     const onDeliveryStatus = (data: { demandId: string; deliveryId: string; status: string }) => {
       setNgoDemands((prev) =>
@@ -203,6 +236,7 @@ export default function DonorDashboard({
       socket.off("listing_status", refresh);
       socket.off("ngo_demand", onNgoDemand);
       socket.off("demand_delivery_status", onDeliveryStatus);
+      socket.off("delivery_confirmed", onDeliveryConfirmed);
     };
   }, [socketRef, fetchListings]);
 
@@ -307,6 +341,12 @@ export default function DonorDashboard({
         @keyframes pulse-text { 0%,100%{opacity:1} 50%{opacity:0.6} }
 
         .dd-ngo-chip { display:flex; align-items:center; gap:6px; padding:6px 10px; background:#f0fdf4; border:1px solid rgba(26,92,56,0.12); border-radius:10px; font-size:0.75rem; color:#1a5c38; font-weight:600; margin-top:6px; }
+        .dd-confirmed-box { margin:8px 0 2px; padding:10px 12px; border-radius:12px; background:#f0fdf4; border:1.5px solid rgba(22,163,74,0.25); }
+        .dd-confirmed-label { font-size:0.68rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#15803d; margin-bottom:5px; display:flex; align-items:center; gap:5px; }
+        .dd-confirmed-photo { width:100%; border-radius:9px; object-fit:cover; max-height:160px; margin-top:5px; display:block; }
+        .dd-confirmed-note { font-size:0.75rem; color:#374151; margin-top:5px; font-style:italic; }
+        .dd-confirmed-time { font-size:0.65rem; color:#6b7280; margin-top:3px; }
+        .dd-awaiting-confirm { display:flex; align-items:center; gap:6px; margin:8px 0 2px; padding:7px 10px; border-radius:10px; background:#fef9c3; border:1px solid rgba(234,179,8,0.2); font-size:0.73rem; color:#854d0e; font-weight:600; }
 
         .dd-empty { text-align:center; padding:4rem 2rem; background:white; border-radius:20px; border:1.5px dashed rgba(44,40,32,0.12); }
         .dd-empty-icon { font-size:3rem; margin-bottom:1rem; opacity:0.4; }
@@ -496,6 +536,37 @@ export default function DonorDashboard({
                           <Truck size={13} />
                           Volunteer: {listing.assignedVolunteer.name}
                         </div>
+                      )}
+
+                      {/* Delivery confirmation panel */}
+                      {listing.status === "delivered" && (
+                        listing.deliveryConfirmation ? (
+                          <div className="dd-confirmed-box">
+                            <div className="dd-confirmed-label">
+                              <CheckCircle2 size={11} /> Receipt confirmed by {listing.deliveryConfirmation.confirmedByNgoName}
+                            </div>
+                            {listing.deliveryConfirmation.photo && (
+                              <Image
+                                src={listing.deliveryConfirmation.photo}
+                                alt="Delivery confirmation"
+                                width={400}
+                                height={200}
+                                unoptimized
+                                className="dd-confirmed-photo"
+                              />
+                            )}
+                            {listing.deliveryConfirmation.note && (
+                              <div className="dd-confirmed-note">"{listing.deliveryConfirmation.note}"</div>
+                            )}
+                            <div className="dd-confirmed-time">
+                              Confirmed {fmtDate(listing.deliveryConfirmation.confirmedAt)}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="dd-awaiting-confirm">
+                            <Clock size={12} /> Awaiting NGO receipt confirmation
+                          </div>
+                        )
                       )}
                     </div>
 
